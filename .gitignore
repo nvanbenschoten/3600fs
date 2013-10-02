@@ -15,3 +15,9 @@
 *.exe
 *.out
 *.app
+
+# Specific files
+3600fs
+3600mkfs
+fs-log.txt
+log.txt
