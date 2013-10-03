@@ -60,8 +60,8 @@ blocknum *blocknum_create(int num, int valid){
 	s = (blocknum *)calloc(1, sizeof(blocknum));
 	assert(s != NULL);
 
-	s->block = num:31;
-	s->valid = valid:1;
+	s->block = num;
+	s->valid = valid;
 
 	return s;
 }
