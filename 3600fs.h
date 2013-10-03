@@ -33,7 +33,7 @@ typedef struct vcb_s {
   	// the location of the first free block
   	blocknum free;
   	// the name of your disk
-  	char name[(BLOCKSIZE - 2*sizeof(int) - 2*sizeof(blocknum))/sizeof(char)];
+  	char name[496];
 } vcb;
 
 typedef struct dnode_t {
@@ -46,25 +46,23 @@ typedef struct dnode_t {
   struct timespec modify_time;
   struct timespec create_time;
   // the locations of the directory entry blocks
-  blocknum direct[(BLOCKSIZE - sizeof(unsigned int) - sizeof(uid_t) 
-  	- sizeof(gid_t) - sizeof(mode_t) 
-  	- 3*sizeof(struct timespec) - 2*sizeof(blocknum))/sizeof(blocknum)]; 
+  blocknum direct[110]; 
   blocknum single_indirect;
   blocknum double_indirect;
 } dnode;
 
 typedef struct indirect_t {
-  blocknum blocks[BLOCKSIZE/sizeof(blocknum)];
+  blocknum blocks[128];
 } indirect;
 
 typedef struct direntry_t {
-  char name[(32-sizeof(char)-sizeof(blocknum))/sizeof(char)];
+  char name[27];
   char type;
   blocknum block;
 } direntry;
 
 typedef struct dirent_t {
-  direntry entries[BLOCKSIZE/sizeof(direntry)];
+  direntry entries[16];
 } dirent;
 
 typedef struct inode_t {
@@ -77,20 +75,40 @@ typedef struct inode_t {
   struct timespec modify_time;
   struct timespec create_time;
   // the locations of the file data blocks
-  blocknum direct[(BLOCKSIZE - sizeof(unsigned int) - sizeof(uid_t) 
-  	- sizeof(gid_t) - sizeof(mode_t) 
-  	- 3*sizeof(struct timespec) - 2*sizeof(blocknum))/sizeof(blocknum)];
+  blocknum direct[110];
   blocknum single_indirect;
   blocknum double_indirect;
 } inode;
 
 typedef struct db_t {
-  char data[BLOCKSIZE];
+  char data[512];
 } db;
 
 typedef struct free_t {
   blocknum next;
-  char junk[(BLOCKSIZE-sizeof(blocknum))/sizeof(char)];
-} free;
+  char junk[508];
+} freeblock;
+
+// Constructors
+blocknum *blocknum_create(int num, int valid);
+vcb *vcb_create(int magic, char *name);
+dnode *dnode_create(unsigned int size, uid_t user, gid_t group, mode_t mode);
+indirect *indirect_create();
+direntry *direntry_create(char type, blocknum block);
+dirent *dirent_create();
+inode *inode_create(unsigned int size, uid_t user, gid_t group, mode_t mode);
+db *db_create();
+freeblock *freeblock_create(blocknum next);
+
+// Destructors
+void blocknum_free(blocknum *s);
+void vcb_free(vcb *s);
+void dnode_free(dnode *s);
+void indirect_free(indirect *s);
+void direntry_free(direntry *s);
+void dirent_free(dirent *s);
+void inode_free(inode *s);
+void db_free(db *s);
+void freeblock_free(freeblock *s);
 
 #endif
