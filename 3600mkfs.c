@@ -9,17 +9,11 @@
  * your disk file).
  */
 
-#include <math.h>
-#include <stdio.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
 #include "3600fs.h"
-#include "disk.h"
 
 void myformat(int size) {
   // Do not touch or move this function

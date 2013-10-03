@@ -18,17 +18,11 @@
 
 #define _POSIX_C_SOURCE 199309
 
-#include <time.h>
 #include <fuse.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
-#include <assert.h>
 #include <sys/statfs.h>
 
 #ifdef HAVE_SETXATTR
@@ -36,7 +30,6 @@
 #endif
 
 #include "3600fs.h"
-#include "disk.h"
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
