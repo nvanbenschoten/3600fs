@@ -20,7 +20,7 @@
 // Defining structures
 typedef struct blocknum_t {
     int block:31;
-    int valid:1;
+    unsigned int valid:1;
 } blocknum;
 
 typedef struct vcb_s {
@@ -90,7 +90,7 @@ typedef struct free_t {
 } freeblock;
 
 // Constructors
-blocknum *blocknum_create(int num, int valid);
+blocknum *blocknum_create(int num, unsigned int valid);
 vcb *vcb_create(int magic, char *name);
 dnode *dnode_create(unsigned int size, uid_t user, gid_t group, mode_t mode);
 indirect *indirect_create();
