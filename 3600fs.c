@@ -100,7 +100,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	dir.block.valid = 0;
 
 	// Read vcb
-	dnode *d = dnode_create(NULL, NULL, NULL, NULL);
+	dnode *d = dnode_create(0, 0, 0, 0);
 
 	int ret = dread(v->root.block, (char *)d);
 	if (ret != BLOCKSIZE)
@@ -147,8 +147,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		return ENOENT;
 	}
 
-	dnode *matchd = dnode_create(NULL, NULL, NULL, NULL);
-	inode *matchi = inode_create(NULL, NULL, NULL, NULL);
+	dnode *matchd = dnode_create(0, 0, 0, 0);
+	inode *matchi = inode_create(0, 0, 0, 0);
 
 	if (dir.type == 0) {
 		// If the dirent is for a directory
