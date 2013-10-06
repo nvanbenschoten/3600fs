@@ -31,7 +31,7 @@ void myformat(int size) {
     vcb_free(v);
 
     // create first dnode block
-    dnode * d = dnode_create(2, getuid(), getgid(), 0777);
+    dnode * d = dnode_create(2, geteuid(), getegid(), 0777);
     d->direct[0] = blocknum_create(2, 1);
     d->single_indirect = blocknum_create(0, 0);
     d->double_indirect = blocknum_create(0, 0);
