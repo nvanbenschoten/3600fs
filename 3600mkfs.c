@@ -21,74 +21,55 @@ void myformat(int size) {
     dcreate_connect();
 
     // set vcb data and write to disk
-    char * n = "3600fs";
+    char * n = DISKFILE;
     vcb * v = vcb_create(1337, n);
-    // blocknum bn = {1, 1};
-    // bn.block = 1;
-    // bn.valid = 0x1;
-    v->root = (blocknum) {1,1};
-    // bn.block = 3;
-    // bn.valid = 1;
-    v->free = (blocknum) {3, 1};
+    v->root = blocknum_create(1,1);
+    v->free = blocknum_create(3, 1);
+
+    // Write to disk
     if (dwrite(0, (char *) v) < 0)
         perror("Error writing block 0 to disk.");
-    free(v);
+    vcb_free(v);
 
     // create first dnode block
     dnode * d = dnode_create(2, getuid(), getgid(), 0777);
-    d->direct[0] = (blocknum) {2, 1};
-    d->single_indirect = (blocknum) {0, 0};
-    d->double_indirect = (blocknum) {0, 0};
+    d->direct[0] = blocknum_create(2, 1);
+    d->single_indirect = blocknum_create(0, 0);
+    d->double_indirect = blocknum_create(0, 0);
     clock_gettime(CLOCK_REALTIME, &(d->create_time));
     clock_gettime(CLOCK_REALTIME, &(d->access_time));
     clock_gettime(CLOCK_REALTIME, &(d->modify_time));
 
     if (dwrite(1, (char *) d) < 0)
         perror("Error writing block 1 to disk.");
-    free(d);
+    dnode_free(d);
 
     // create fist dirent block
     // types: (not sure if these are decided by us or by inodes spec?)
     // 0 = directory
     // 1 = file
     dirent * de = dirent_create();
-    de->entries[0] = * direntry_create(0, (blocknum) {1, 1});
-    strcpy(de->entries[0].name, ".");
-    de->entries[1] = * direntry_create(0, (blocknum) {1, 1});
-    strcpy(de->entries[1].name, "..");
+    de->entries[0] = direntry_create(".", 0, blocknum_create(1, 1));
+    de->entries[1] = direntry_create("..", 0, blocknum_create(1, 1));
 
     if (dwrite(2, (char *) de) < 0)
         perror("Error writing block 2 to disk.");
-    free(de);
+    dirent_free(de);
 
     // mark rest of blocks as free
     for (int i = 3; i < size; i++) {
         freeblock * f;
         if (i + 1 != size) { // if the current free block is not the last one
-            f = freeblock_create((blocknum) {i+1, 1}); // point to next block
+            f = freeblock_create(blocknum_create(i+1, 1)); // point to next block
         }
         else { // it is the last one
-            f = freeblock_create((blocknum) {0, 0}); // pointer to next block is NULL
+            f = freeblock_create(blocknum_create(0, 0)); // pointer to next block is NULL
         }
+
         if (dwrite(i, (char *) f) < 0)
             perror("Error writing free block to disk.");
-        free(f);
+        freeblock_free(f);
     }
-
-    //char * tmp = (char *) malloc(BLOCKSIZE);
-    //memset(tmp, 0, 
-
-
-    // first, create a zero-ed out array of memory  
-    //char *tmp = (char *) malloc(BLOCKSIZE);
-    //memset(tmp, 0, BLOCKSIZE);
-
-    // now, write that to every block
-    //for (int i=0; i<size; i++) 
-    //        if (dwrite(i, tmp) < 0) 
-    //                perror("Error while writing to disk");
-
-    // voila! we now have a disk containing all zeros
 
     // Do not touch or move this function
     dunconnect();
@@ -104,139 +85,6 @@ int main(int argc, char** argv) {
 
     unsigned long size = atoi(argv[1]);
     printf("Formatting the disk with size %lu \n", size);
+
     myformat(size);
-}
-
-// Constructors
-blocknum *blocknum_create(int num, unsigned int valid){
-    blocknum *s;
-    s = (blocknum *)calloc(1, sizeof(blocknum));
-    assert(s != NULL);
-
-    s->block = num;
-    s->valid = valid;
-
-    return s;
-}
-
-vcb *vcb_create(int magic, char *name) {
-    vcb *s;
-    s = (vcb *)calloc(1, sizeof(vcb));
-    assert(s != NULL);
-
-    s->magic = magic;
-    s->blocksize = BLOCKSIZE;
-
-    strncpy(s->name, name, 496);
-    s->name[495] = '\0';
-
-    return s;
-}
-
-dnode *dnode_create(unsigned int size, uid_t user, gid_t group, mode_t mode) {
-    dnode *s;
-    s = (dnode *)calloc(1, sizeof(dnode));
-    assert(s != NULL);
-
-    s->size = size;
-    s->user = user;
-    s->group = group;
-    s->mode = mode;
-
-    return s;
-}
-
-indirect *indirect_create() {
-    indirect *s;
-    s = (indirect *)calloc(1, sizeof(indirect));
-    assert(s != NULL);
-
-    return s;
-}
-
-direntry *direntry_create(char type, blocknum block) {
-    direntry *s;
-    s = (direntry *)calloc(1, sizeof(direntry));
-    assert(s != NULL);
-
-    s->type = type;
-    s->block = block;
-
-    return s;
-}
-
-dirent *dirent_create() {
-    dirent *s;
-    s = (dirent *)calloc(1, sizeof(dirent));
-    assert(s != NULL);
-
-    return s;
-}
-
-inode *inode_create(unsigned int size, uid_t user, gid_t group, mode_t mode) {
-    inode *s;
-    s = (inode *)calloc(1, sizeof(inode));
-    assert(s != NULL);
-
-    s->size = size;
-    s->user = user;
-    s->group = group;
-    s->mode = mode;
-
-    return s;
-}
-
-db *db_create() {
-    db *s;
-    s = (db *)calloc(1, sizeof(db));
-    assert(s != NULL);
-
-    return s;
-}
-
-freeblock *freeblock_create(blocknum next) {
-    freeblock *s;
-    s = (freeblock *)calloc(1, sizeof(freeblock));
-    assert(s != NULL);
-
-    s->next = next;
-
-    return s;
-}
-
-// Destructors
-void blocknum_free(blocknum *s) {
-    free(s);
-}
-
-void vcb_free(vcb *s) {
-    free(s);
-}
-
-void dnode_free(dnode *s) {
-    free(s);
-}
-
-void indirect_free(indirect *s) {
-    free(s);
-}
-
-void direntry_free(direntry *s) {
-    free(s);
-}
-
-void dirent_free(dirent *s) {
-    free(s);
-}
-
-void inode_free(inode *s) {
-    free(s);
-}
-
-void db_free(db *s) {
-    free(s);
-}
-
-void freeblock_free(freeblock *s) {
-    free(s);
 }

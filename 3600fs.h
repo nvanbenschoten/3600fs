@@ -19,96 +19,100 @@
 
 // Defining structures
 typedef struct blocknum_t {
-    int block:31;
-    unsigned int valid:1;
+	int block:31;
+	unsigned int valid:1;
 } blocknum;
 
 typedef struct vcb_s {
-    // a magic number of identify your disk
-    int magic;
-    // the block size
-    int blocksize;
-    // the location of the root DNODE
-    blocknum root;
-    // the location of the first free block
-    blocknum free;
-    // the name of your disk
-    char name[496];
+	// a magic number of identify your disk
+	int magic;
+	// the block size
+	int blocksize;
+	// the location of the root DNODE
+	blocknum root;
+	// the location of the first free block
+	blocknum free;
+	// the name of your disk
+	char name[496];
 } vcb;
 
 typedef struct dnode_t {
-    // directory node metadata
-    unsigned int size;
-    uid_t user;
-    gid_t group;
-    mode_t mode;
-    struct timespec access_time;
-    struct timespec modify_time;
-    struct timespec create_time;
-    // the locations of the directory entry blocks
-    blocknum direct[110]; 
-    blocknum single_indirect;
-    blocknum double_indirect;
+	// directory node metadata
+	unsigned int size;
+	uid_t user;
+	gid_t group;
+	mode_t mode;
+	struct timespec access_time;
+	struct timespec modify_time;
+	struct timespec create_time;
+	// the locations of the directory entry blocks
+	blocknum direct[110]; 
+	blocknum single_indirect;
+	blocknum double_indirect;
 } dnode;
 
 typedef struct indirect_t {
-    blocknum blocks[128];
+	blocknum blocks[128];
 } indirect;
 
 typedef struct direntry_t {
-    char name[27];
-    char type;
-    blocknum block;
+	// types: (not sure if these are decided by us or by inodes spec?)
+    // 0 = directory
+    // 1 = file
+	char name[27];
+	char type;
+	blocknum block;
 } direntry;
 
 typedef struct dirent_t {
-    direntry entries[16];
+	direntry entries[16];
 } dirent;
 
 typedef struct inode_t {
-    // the file metadata
-    unsigned int size;
-    uid_t user;
-    gid_t group;
-    mode_t mode;
-    struct timespec access_time;
-    struct timespec modify_time;
-    struct timespec create_time;
-    // the locations of the file data blocks
-    blocknum direct[110];
-    blocknum single_indirect;
-    blocknum double_indirect;
+	// the file metadata
+	unsigned int size;
+	uid_t user;
+	gid_t group;
+	mode_t mode;
+	struct timespec access_time;
+	struct timespec modify_time;
+	struct timespec create_time;
+	// the locations of the file data blocks
+	blocknum direct[110];
+	blocknum single_indirect;
+	blocknum double_indirect;
 } inode;
 
 typedef struct db_t {
-    char data[512];
+	char data[512];
 } db;
 
 typedef struct free_t {
-    blocknum next;
-    char junk[508];
+	blocknum next;
+	char junk[508];
 } freeblock;
 
 // Constructors
-blocknum *blocknum_create(int num, unsigned int valid);
+blocknum blocknum_create(int num, unsigned int valid);
 vcb *vcb_create(int magic, char *name);
 dnode *dnode_create(unsigned int size, uid_t user, gid_t group, mode_t mode);
 indirect *indirect_create();
-direntry *direntry_create(char type, blocknum block);
+direntry direntry_create(char * name, char type, blocknum block);
 dirent *dirent_create();
 inode *inode_create(unsigned int size, uid_t user, gid_t group, mode_t mode);
 db *db_create();
 freeblock *freeblock_create(blocknum next);
 
 // Destructors
-void blocknum_free(blocknum *s);
 void vcb_free(vcb *s);
 void dnode_free(dnode *s);
 void indirect_free(indirect *s);
-void direntry_free(direntry *s);
 void dirent_free(dirent *s);
 void inode_free(inode *s);
 void db_free(db *s);
 void freeblock_free(freeblock *s);
+
+// Helper Functions
+void disk_crash();
 
 #endif
