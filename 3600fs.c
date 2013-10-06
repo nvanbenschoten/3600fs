@@ -152,23 +152,28 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		// If the dirent is for a directory
 		bufdread(dir.block.block, (char *)matchd, sizeof(dnode));
 
-		stbuf->st_mode  = 0777 | S_IFDIR;
+		stbuf->st_mode    = matchd->mode | S_IFDIR; // Directory node
+		stbuf->st_uid     = matchd->user; // directory uid
+		stbuf->st_gid     = matchd->group; // directory gid
+		stbuf->st_atime   = matchd->access_time; // access time
+		stbuf->st_mtime   = matchd->modify_time; // modify time
+		stbuf->st_ctime   = matchd->create_time; // create time
+		stbuf->st_size    = BLOCKSIZE*matchd->size; // directory size
+		stbuf->st_blocks  = matchd->size; // directory size in blocks
 	}
 	else {
 		// If the dirent is for a file
 		bufdread(dir.block.block, (char *)matchi, sizeof(inode));
 
-		stbuf->st_mode  = matchi->mode | S_IFREG;
+		stbuf->st_mode    = matchi->mode | S_IFREG;
+		stbuf->st_uid     = matchi->user; // file uid
+		stbuf->st_gid     = matchi->group; // file gid
+		stbuf->st_atime   = matchi->access_time; // access time 
+		stbuf->st_mtime   = matchi->modify_time; // modify time
+		stbuf->st_ctime   = matchi->create_time; // create time
+		stbuf->st_size    = matchi->size; // file size
+		stbuf->st_blocks  = (matchi->size + BLOCKSIZE - 1)/(BLOCKSIZE); // file size in blocks
 	}
-
-	/*stbuf->st_uid     = // file uid
-	stbuf->st_gid     = // file gid
-	stbuf->st_atime   = // access time 
-	stbuf->st_mtime   = // modify time
-	stbuf->st_ctime   = // create time
-	stbuf->st_size    = // file size
-	stbuf->st_blocks  = // file size in blocks
-	*/
 
 	dnode_free(matchd);
 	inode_free(matchi);
