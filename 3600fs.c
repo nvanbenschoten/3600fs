@@ -248,7 +248,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			if (de->entries[i].block.valid) {
 				// If the entry is valid
 				count++;
-				if(filler(buf, de->entries[i].name; NULL, 0)) {
+				if(filler(buf, de->entries[i].name, NULL, 0)) {
 					dirent_free(de);
 					dnode_free(d);
 					return 0;
