@@ -27,8 +27,7 @@ void myformat(int size) {
     v->free = blocknum_create(3, 1);
 
     // Write to disk
-    if (dwrite(0, (char *) v) < 0)
-        perror("Error writing block 0 to disk.");
+    bufdwrite(0, (char *)v, sizeof(vcb));
     vcb_free(v);
 
     // create first dnode block
@@ -40,8 +39,7 @@ void myformat(int size) {
     clock_gettime(CLOCK_REALTIME, &(d->access_time));
     clock_gettime(CLOCK_REALTIME, &(d->modify_time));
 
-    if (dwrite(1, (char *)d) < 0)
-        perror("Error writing block 1 to disk.");
+    bufdwrite(1, (char *)d, sizeof(dnode));
     dnode_free(d);
 
     // create fist dirent block
@@ -52,8 +50,7 @@ void myformat(int size) {
     de->entries[0] = direntry_create(".", 0, blocknum_create(1, 1));
     de->entries[1] = direntry_create("..", 0, blocknum_create(1, 1));
 
-    if (dwrite(2, (char *)de) < 0)
-        perror("Error writing block 2 to disk.");
+    bufdwrite(2, (char *)de, sizeof(dirent));
     dirent_free(de);
 
     // mark rest of blocks as free
@@ -66,8 +63,7 @@ void myformat(int size) {
             f = freeblock_create(blocknum_create(0, 0)); // pointer to next block is NULL
         }
 
-        if (dwrite(i, (char *) f) < 0)
-            perror("Error writing free block to disk.");
+        bufdwrite(i, (char *)f, sizeof(freeblock));
         freeblock_free(f);
     }
 

@@ -54,9 +54,7 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 
 	v = vcb_create(0, "");
 
-	int ret = dread(0, (char *) v);
-	if (ret != BLOCKSIZE)
-		disk_crash();
+	bufdread(0, (char *)v, sizeof(vcb));
 
 	// Check integrity of vcb
 
@@ -106,9 +104,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	// Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
 
-	int ret = dread(v->root.block, (char *)d);
-	if (ret != BLOCKSIZE)
-		disk_crash();
+	int ret = bufdread(v->root.block, (char *)d, sizeof(dnode));
 
 	// Check in direct
 	int i;
@@ -118,9 +114,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		// Count number of valid while comparing until all are acocunted for
 		dirent *de = dirent_create();
 
-		int ret = dread(d->direct[i].block, (char *)de);
-		if (ret != BLOCKSIZE)
-			disk_crash();
+		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
 
 		int j;
 		for (j = 0; j < 16; j++) {
@@ -156,17 +150,13 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	if (dir.type == 0) {
 		// If the dirent is for a directory
-		int ret = dread(dir.block.block, (char *)matchd);
-		if (ret != BLOCKSIZE)
-			disk_crash();
+		bufdread(dir.block.block, (char *)matchd, sizeof(dnode));
 
 		stbuf->st_mode  = 0777 | S_IFDIR;
 	}
 	else {
 		// If the dirent is for a file
-		int ret = dread(dir.block.block, (char *)matchi);
-		if (ret != BLOCKSIZE)
-			disk_crash();
+		bufdread(dir.block.block, (char *)matchi, sizeof(inode));
 
 		stbuf->st_mode  = matchi->mode | S_IFREG;
 	}
@@ -392,9 +382,4 @@ int main(int argc, char *argv[]) {
 		exit(-1);
 	}
 	return fuse_main(argc, argv, &vfs_oper, NULL);
-}
-
-void disk_crash() {
-	printf("ERROR: Your disk image crashed\n");
-	exit(1);
 }
