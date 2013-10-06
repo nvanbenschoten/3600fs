@@ -1,0 +1,39 @@
+3600fs
+
+Nathaniel Dempkowski and Nathan Vanbenschoten
+
+We have chosen to implement the inode-based file system layout.
+
+At a high level, the disk is divided into seven different types of blocks:
+    - Volume Control (VCB)
+      The VCB is the first block in the file system, and contains metadata about the entire disk
+      and the location of the root directory. The location of the first FREE block is also stored
+      in the VCB.
+    - Directory Node (DNODE)
+      DNODE blocks denote a directory, and as a result there is one per directory, which contains
+      metadata about the directory as well as pointers to the DIRENT blocks that actually contain
+      directory entries.
+    - Directory Entry (DIRENT)
+      DIRENT blocks contain the contents of directories, which is generally the name, type, and
+      block number of each entry, along with the validity of that entry. 
+    - File Node (INODE)
+      INODE blocks represent files, and thus contain metadata about the file including, size,
+      user ID of the owner, group ID of the owner, and the permissions associated with the file.
+    - Indirect (INDIRECT)
+      INDIRECT blocks store pointers to either DIRENT blocks or INDIRECT blocks. They are used to
+      efficiently store additional information about directories as needed.
+    - Data (DB)
+      DB blocks contain raw user data, and nothing else.
+    - Free (FREE)
+      FREE blocks are blocks that can be used as necessary by the file system, which also store
+      information abount the next free block as a singly linked list.
+
+Upon the initial format of the disk, we create a VCB as block 0, a DNODE as block 1, a DIRENT as
+block 2, and FREE blocks as blocks 3-N. Anywhere a block number is stored, we also store the
+validity of that number, which serves as an efficient check for things like free space, and some
+directory entries. 
+
+We chose to implement the inode-based file system layout because we felt that it was a more
+elegant and interesting design, and were willing to put in the extra effort that goes along with
+that. It also more closely mirrors modern file system layouts, and we felt there was more to be
+learned from implementing it.
