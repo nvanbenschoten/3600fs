@@ -114,5 +114,7 @@ void freeblock_free(freeblock *s);
 
 // Helper Functions
 void disk_crash();
+int bufdread(int blocknum, char * buf, int size);
+int bufdwrite(int blocknum, const char * buf, int size);
 
 #endif

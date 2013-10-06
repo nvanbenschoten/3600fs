@@ -1,7 +1,7 @@
 #include "3600fs.h"
 
 // Constructors
-blocknum blocknum_create(int num, unsigned int valid){
+blocknum blocknum_create(int num, unsigned int valid) {
     blocknum s;
 
     s.block = num;
@@ -94,6 +94,8 @@ freeblock *freeblock_create(blocknum next) {
     return s;
 }
 
+
+// Destructors
 void vcb_free(vcb *s) {
     free(s);
 }
@@ -120,4 +122,36 @@ void db_free(db *s) {
 
 void freeblock_free(freeblock *s) {
     free(s);
+}
+
+
+// Helper functions
+void disk_crash() {
+    perror("ERROR: Your disk image crashed\n");
+    exit(1);
+}
+
+int bufdread(int blocknum, char * buf, int size) {
+    char tmp[BLOCKSIZE];
+    memset(tmp, 0, BLOCKSIZE);
+
+    int ret = dread(blocknum, tmp);
+    if (ret < 0)
+        disk_crash();
+
+    memcpy(buf, tmp, size);
+
+    return ret;
+}
+
+int bufdwrite(int blocknum, const char * buf, int size) {
+    char tmp[BLOCKSIZE];
+    memset(tmp, 0, BLOCKSIZE);
+    memcpy(tmp, buf, size);
+
+    int ret = dwrite(blocknum, tmp);
+    if (ret < 0)
+        disk_crash();
+
+    return ret;
 }
