@@ -104,7 +104,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	// Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
 
-	int ret = bufdread(v->root.block, (char *)d, sizeof(dnode));
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
 
 	// Check in direct
 	int i;
@@ -117,7 +117,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
 
 		int j;
-		for (j = 0; j < 16; j++) {
+		for (j = 0; count < d->size && j < 16; j++) {
 			// j = direntry entry
 			if (de->entries[i].block.valid) {
 				count++;
@@ -142,7 +142,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	// Check to see if match is valid
 	if (!dir.block.valid) {
-		return ENOENT;
+		return -ENOENT;
 	}
 
 	dnode *matchd = dnode_create(0, 0, 0, 0);
@@ -223,6 +223,43 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 					   off_t offset, struct fuse_file_info *fi)
 {
+
+	if (strcmp(path, "/") != 0)
+		return -1;
+
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+
+	// Check in direct
+	int i;
+	unsigned int count = 0;
+	for (i = 0; count < d->size && i < 110; i++) {
+		// i = direct blocks
+		// Count number of valid while comparing until all are acocunted for
+		dirent *de = dirent_create();
+
+		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
+
+		int j;
+		for (j = 0; count < d->size && j < 16; j++) {
+			// j = direntry entry
+			if (de->entries[i].block.valid) {
+				// If the entry is valid
+				count++;
+				if(filler(buf, de->entries[i].name; NULL, 0)) {
+					dirent_free(de);
+					dnode_free(d);
+					return 0;
+				}
+			}
+		}
+
+		dirent_free(de);
+	}
+
+	dnode_free(d);
 
 	return 0;
 }

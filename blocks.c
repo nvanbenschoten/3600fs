@@ -49,6 +49,7 @@ direntry direntry_create(char * name, char type, blocknum block) {
     direntry s;
 
     strncpy(s.name, name, 26);
+    s.name[26] = '\0';
     s.type = type;
     s.block = block;
 
