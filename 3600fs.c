@@ -155,9 +155,9 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		stbuf->st_mode    = matchd->mode | S_IFDIR; // Directory node
 		stbuf->st_uid     = matchd->user; // directory uid
 		stbuf->st_gid     = matchd->group; // directory gid
-		stbuf->st_atime   = matchd->access_time; // access time
-		stbuf->st_mtime   = matchd->modify_time; // modify time
-		stbuf->st_ctime   = matchd->create_time; // create time
+		stbuf->st_atime   = matchd->access_time.tv_sec; // access time
+		stbuf->st_mtime   = matchd->modify_time.tv_sec; // modify time
+		stbuf->st_ctime   = matchd->create_time.tv_sec; // create time
 		stbuf->st_size    = BLOCKSIZE*matchd->size; // directory size
 		stbuf->st_blocks  = matchd->size; // directory size in blocks
 	}
@@ -168,9 +168,9 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		stbuf->st_mode    = matchi->mode | S_IFREG;
 		stbuf->st_uid     = matchi->user; // file uid
 		stbuf->st_gid     = matchi->group; // file gid
-		stbuf->st_atime   = matchi->access_time; // access time 
-		stbuf->st_mtime   = matchi->modify_time; // modify time
-		stbuf->st_ctime   = matchi->create_time; // create time
+		stbuf->st_atime   = matchi->access_time.tv_sec; // access time 
+		stbuf->st_mtime   = matchi->modify_time.tv_sec; // modify time
+		stbuf->st_ctime   = matchi->create_time.tv_sec; // create time
 		stbuf->st_size    = matchi->size; // file size
 		stbuf->st_blocks  = (matchi->size + BLOCKSIZE - 1)/(BLOCKSIZE); // file size in blocks
 	}
