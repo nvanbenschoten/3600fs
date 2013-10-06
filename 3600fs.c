@@ -52,6 +52,8 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 	/* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
 		AND LOAD ANY DATA STRUCTURES INTO MEMORY */
 
+	v = vcb_create(0, "");
+
 	int ret = dread(0, (char *) v);
 	if (ret != BLOCKSIZE)
 		disk_crash();
@@ -72,6 +74,8 @@ static void vfs_unmount (void *private_data) {
 	/* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
 		ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
 		KEEP DATA CACHED THAT'S NOT ON DISK */
+
+	vcb_free(v);
 
 	// Do not touch or move this code; unconnects the disk
 	dunconnect();
