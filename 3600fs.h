@@ -17,6 +17,8 @@
 
 #include "disk.h"
 
+ extern const int DISKNUMBER;
+
 // Defining structures
 typedef struct blocknum_t {
 	int block:31;

@@ -15,6 +15,8 @@
 #include <sys/stat.h>
 
 #include "3600fs.h"
+
+const int DISKNUMBER = 13371337;
     
 void myformat(int size) {
     // Do not touch or move this function
@@ -22,7 +24,7 @@ void myformat(int size) {
 
     // set vcb data and write to disk
     char * n = DISKFILE;
-    vcb * v = vcb_create(1337, n);
+    vcb * v = vcb_create(DISKNUMBER, n);
     v->root = blocknum_create(1,1);
     v->free = blocknum_create(3, 1);
 

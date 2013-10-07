@@ -57,6 +57,10 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 	bufdread(0, (char *)v, sizeof(vcb));
 
 	// Check integrity of vcb
+	if (v->magic != DISKNUMBER) {
+		printf("%s\n", "The disk connected was not the correct disk");
+		dunconnect();
+	}
 
 
 	return NULL;
