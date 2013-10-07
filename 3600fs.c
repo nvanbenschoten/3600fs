@@ -150,7 +150,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		stbuf->st_size    = BLOCKSIZE*matchd->size; // directory size
 		stbuf->st_blocks  = matchd->size; // directory size in blocks
 	}
-	else if (ret = 1) {
+	else if (ret == 1) {
 		// If the dirent is for a file
 		stbuf->st_mode    = matchi->mode | S_IFREG;
 		stbuf->st_uid     = matchi->user; // file uid
