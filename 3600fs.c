@@ -425,3 +425,80 @@ int main(int argc, char *argv[]) {
 	}
 	return fuse_main(argc, argv, &vfs_oper, NULL);
 }
+
+// Helper functions
+int findDNODE(dnode *directory, char *path) {
+	if (path[0]  != '/')
+		return -1;
+
+	char *searchPath = (char *)calloc(strlen(path)+1, sizeof(char));
+	assert(searchPath != NULL);
+
+	char *restOfPath = (char *)calloc(strlen(path)+1, sizeof(char));
+	assert(restOfPath != NULL);
+	restOfPath[0] = '/';
+
+	int i;
+	int hitFirstBackslashFlag = 0;
+	for (i = 1; i < strlen(path); i++) {
+		if (!hitFirstBackslashFlag) {
+			// Add to searchPath
+			if (path[i] == '/') {
+				// Hit first backslash
+				searchPath[i-1] = '\0';
+				hitFirstBackslashFlag = 1;
+			}
+			else {
+				// Didnt
+				searchPath[i-1] = path[i];
+			}
+		}
+		else {
+			// Add to restOfPath
+			restOfPath[i-strlen(searchPath)-1] = path[i];
+		}
+	} 
+
+	restOfPath[i-strlen(searchPath)-1] = '\0';
+
+	// Check in direct
+	unsigned int count = 0;
+	for (i = 0; count < directory->size && i < 110; i++) {
+		// i = direct blocks
+		// Count number of valid while comparing until all are acocunted for
+		dirent *de = dirent_create();
+
+		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
+
+		int j;
+		for (j = 0; count < d->size && j < 16; j++) {
+			// j = direntry entry
+			if (de->entries[i].block.valid) {
+				count++;
+				if (de->entries[i].type = 0 && !strcmp(de->entries[i].name, searchPath))
+					// If match found, overwrite current dnode
+					bufdread(de->entries[i].block, (char *)directory, sizeof(dnode));
+					free(searchPath);
+					dirent_free(de);
+					if (hitFirstBackslashFlag) {
+						// More to path
+						int ret = findDNODE(directory, restOfPath);
+						free(restOfPath);
+						return ret;
+					}
+					else {
+						// Found correct one
+						free(restOfPath);
+						return 0;
+					}
+			}
+		}
+
+		dirent_free(de);
+	}
+
+	free(searchPath);
+	free(restOfPath);
+
+	return -1;
+}
