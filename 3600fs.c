@@ -471,7 +471,7 @@ int findDNODE(dnode *directory, char *path) {
 		bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 		int j;
-		for (j = 0; count < d->size && j < 16; j++) {
+		for (j = 0; count < directory->size && j < 16; j++) {
 			// j = direntry entry
 			if (de->entries[i].block.valid) {
 				count++;
