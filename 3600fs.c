@@ -438,7 +438,7 @@ int findDNODE(dnode *directory, char *path) {
 	assert(restOfPath != NULL);
 	restOfPath[0] = '/';
 
-	int i;
+	unsigned int i;
 	int hitFirstBackslashFlag = 0;
 	for (i = 1; i < strlen(path); i++) {
 		if (!hitFirstBackslashFlag) {
@@ -468,16 +468,16 @@ int findDNODE(dnode *directory, char *path) {
 		// Count number of valid while comparing until all are acocunted for
 		dirent *de = dirent_create();
 
-		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
+		bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 		int j;
 		for (j = 0; count < d->size && j < 16; j++) {
 			// j = direntry entry
 			if (de->entries[i].block.valid) {
 				count++;
-				if (de->entries[i].type = 0 && !strcmp(de->entries[i].name, searchPath))
+				if ((de->entries[i].type = 0) && (!strcmp(de->entries[i].name, searchPath)))
 					// If match found, overwrite current dnode
-					bufdread(de->entries[i].block, (char *)directory, sizeof(dnode));
+					bufdread(de->entries[i].block.block, (char *)directory, sizeof(dnode));
 					free(searchPath);
 					dirent_free(de);
 					if (hitFirstBackslashFlag) {
