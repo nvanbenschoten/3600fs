@@ -102,11 +102,15 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	stbuf->st_rdev  = 0;
 	stbuf->st_blksize = BLOCKSIZE;
 
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
+
 	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(name != NULL);
 
 	// Seperating the directory name from the file/directory name
-	if (seperatePathAndName(path, name)) {
+	if (seperatePathAndName(pathcpy, name)) {
 		printf("Error seperating the path and filename\n");
 		return -1;
 	}
@@ -118,7 +122,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	if (strcmp(path, "")) {
 		// If path isnt the root directory
 		// Transforms d to the correct directory
-		if(findDNODE(d, path)) {
+		if(findDNODE(d, pathcpy)) {
 			// If ditectory could not be found
 			printf("Could not find directory\n");
 			return -1;
@@ -137,8 +141,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	}
 	else if (ret == 0) {
 		// If the dirent is for a directory
-		bufdread(dir.block.block, (char *)matchd, sizeof(dnode));
-
 		stbuf->st_mode    = matchd->mode | S_IFDIR; // Directory node
 		stbuf->st_uid     = matchd->user; // directory uid
 		stbuf->st_gid     = matchd->group; // directory gid
@@ -150,8 +152,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	}
 	else if (ret = 1) {
 		// If the dirent is for a file
-		bufdread(dir.block.block, (char *)matchi, sizeof(inode));
-
 		stbuf->st_mode    = matchi->mode | S_IFREG;
 		stbuf->st_uid     = matchi->user; // file uid
 		stbuf->st_gid     = matchi->group; // file gid
