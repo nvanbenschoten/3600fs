@@ -601,10 +601,10 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 		// Count number of valid while comparing until all are acocunted for
 		dirent *de = dirent_create();
 
-		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
+		bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 		int j;
-		for (j = 0; count < d->size && j < 16; j++) {
+		for (j = 0; count < directory->size && j < 16; j++) {
 			// j = direntry entry
 			if (de->entries[i].block.valid) {
 				count++;
@@ -628,11 +628,11 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 		dirent_free(de);
 	}
 
-	if (d->size > 16*110) {
+	if (directory->size > 16*110) {
 		// Single indirect
 	}
 
-	if (d->size > 16*110+16*128) {
+	if (directory->size > 16*110+16*128) {
 		// Double indirect
 	} 
 
