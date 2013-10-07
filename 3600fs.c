@@ -483,7 +483,40 @@ int main(int argc, char *argv[]) {
 	return fuse_main(argc, argv, &vfs_oper, NULL);
 }
 
-// Helper functions
+// HELPER FUNCTIONS
+
+// Params
+// 	path = path name in string that should be passed in and changed
+// 	name = char * that will be populated with file name
+// Returns
+// 	-1 if error
+// 	0 if no error
+int seperatePathAndName(char *path, char *name) {
+	unsigned int i;
+	for (i = strlen(path)-1; path[i] != '/'; i--) {
+		if (i == 0)
+			return -1;
+	} 
+
+	unsigned int j;
+	for (j = 0; j+i+1 < strlen(path); j++) {
+		// Copys string after last backslash to name
+		name[j] = path[j+i+1];
+	}
+
+	// Null terminates each string
+	name[j] = '\0';
+	path[i] = '\0';
+
+	return 0;
+}
+
+// Params
+// 	directory = root dnode that will be changed to match
+// 	path = path name in string
+// Returns
+// 	-1 if no match found
+// 	0 if match found
 int findDNODE(dnode *directory, char *path) {
 	if (path[0]  != '/')
 		return -1;
@@ -558,4 +591,17 @@ int findDNODE(dnode *directory, char *path) {
 	free(restOfPath);
 
 	return -1;
+}
+
+// Params
+// 	directory = root dnode
+// 	name = name of node looking for
+// 	searchDnode = dnode will be filled in if found
+// 	searchInode = inode will be filled in if found
+// Returns
+// 	-1 if no match found
+// 	0 if directory match found (searchDnode will be filled in)
+// 	1 if file match found (searchInode will be filled in)
+int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode) {
+	return 0;
 }
