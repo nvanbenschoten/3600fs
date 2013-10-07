@@ -15,8 +15,6 @@
 #include <sys/stat.h>
 
 #include "3600fs.h"
-
-const int DISKNUMBER = 13371337;
     
 void myformat(int size) {
     // Do not touch or move this function

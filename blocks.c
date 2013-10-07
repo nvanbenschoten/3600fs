@@ -1,5 +1,7 @@
 #include "3600fs.h"
 
+const int DISKNUMBER = 13371337;
+
 // Constructors
 blocknum blocknum_create(int num, unsigned int valid) {
     blocknum s;
