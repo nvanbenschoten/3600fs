@@ -233,7 +233,64 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-	return 0;
+    //int p = 0; // path dir index
+    blocknum root = v->root; // root block number
+    dnode *d = dnode_create(0, 0, 0, 0);
+    bufdread(root.block, (char *) d, BLOCKSIZE);
+    int d_last_eb = 0;
+    while (d->direct[d_last_eb].valid) { // find last directory entry block
+        d_last_eb++;
+    }
+    d_last_eb--;
+    // read directory entry block
+    dirent *de = dirent_create();
+    bufdread(d->direct[d_last_eb].block, (char *) de, BLOCKSIZE);
+
+    int d_last_ent = 0;
+    while (de->entries[d_last_ent].block.valid) {
+        d_last_ent++;
+    }
+    path++; // move up path pointer to remove inital /
+    strcpy(de->entries[d_last_ent].name, path);
+    de->entries[d_last_ent].type = 1;
+    de->entries[d_last_ent].block = blocknum_create(v->free.block, 1);
+    bufdwrite(d->direct[d_last_eb].block, (char *) de, BLOCKSIZE);
+
+    d->size =+ 1;
+
+    int writenum = v->free.block; // this could be turned into a function which returns
+    freeblock * f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
+    bufdread(v->free.block, (char *) f, BLOCKSIZE);
+    v->free = f->next;
+    free(f);
+    
+    inode * i = inode_create(0, geteuid(), getegid(), mode);
+    clock_gettime(CLOCK_REALTIME, &(d->create_time));
+    clock_gettime(CLOCK_REALTIME, &(d->access_time));
+    clock_gettime(CLOCK_REALTIME, &(d->modify_time));
+    i->direct[0] = v->free;
+    i->single_indirect = blocknum_create(0, 0);
+    i->double_indirect = blocknum_create(0, 0);
+    bufdwrite(writenum, (char *) i, BLOCKSIZE);
+
+
+    //writenum = v->free.block; // this could be turned into a function which returns
+    f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
+    bufdread(v->free.block, (char *) f, BLOCKSIZE);
+    v->free = f->next;
+    free(f);
+
+    bufdwrite(0, (char *) v, BLOCKSIZE);
+    // write new file info to directory
+
+    // write file to free blocks
+
+    // free all the stuff
+    dnode_free(d);
+    dirent_free(de);
+    inode_free(i);
+
+    return 0;
 }
 
 /*
