@@ -102,57 +102,40 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	stbuf->st_rdev  = 0;
 	stbuf->st_blksize = BLOCKSIZE;
 
-	direntry dir;
-	dir.block.valid = 0;
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(path, name)) {
+		printf("Error seperating the path and filename\n");
+		return -1;
+	}
 
 	// Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
-
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
 
-	// Check in direct
-	int i;
-	unsigned int count = 0;
-	for (i = 0; count < d->size && i < 110 && !dir.block.valid; i++) {
-		// i = direct blocks
-		// Count number of valid while comparing until all are acocunted for
-		dirent *de = dirent_create();
-
-		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
-
-		int j;
-		for (j = 0; count < d->size && j < 16; j++) {
-			// j = direntry entry
-			if (de->entries[i].block.valid) {
-				count++;
-				if (!strcmp(path, de->entries[i].name))
-					dir = de->entries[i];
-					break;
-			}
+	if (strcmp(path, "")) {
+		// If path isnt the root directory
+		// Transforms d to the correct directory
+		if(findDNODE(d, path)) {
+			// If ditectory could not be found
+			printf("Could not find directory\n");
+			return -1;
 		}
-
-		dirent_free(de);
-	}
-
-	if (d->size > 16*110 && !dir.block.valid) {
-		// Single indirect
-	}
-
-	if (d->size > 16*110+16*128 && !dir.block.valid) {
-		// Double indirect
-	} 
-
-	dnode_free(d);
-
-	// Check to see if match is valid
-	if (!dir.block.valid) {
-		return -ENOENT;
 	}
 
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
 
-	if (dir.type == 0) {
+	int ret = getNODE(d, name, matchd, matchi);
+	dnode_free(d);
+
+	// Check to see if match is valid
+	if (ret == -1) {
+		return -ENOENT;
+	}
+	else if (ret == 0) {
 		// If the dirent is for a directory
 		bufdread(dir.block.block, (char *)matchd, sizeof(dnode));
 
@@ -165,7 +148,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		stbuf->st_size    = BLOCKSIZE*matchd->size; // directory size
 		stbuf->st_blocks  = matchd->size; // directory size in blocks
 	}
-	else {
+	else if (ret = 1) {
 		// If the dirent is for a file
 		bufdread(dir.block.block, (char *)matchi, sizeof(inode));
 
@@ -607,5 +590,51 @@ int findDNODE(dnode *directory, char *path) {
 // 	0 if directory match found (searchDnode will be filled in)
 // 	1 if file match found (searchInode will be filled in)
 int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode) {
-	return 0;
+	direntry dir;
+	dir.block.valid = 0;
+
+	// Check in directory
+	int i;
+	unsigned int count = 0;
+	for (i = 0; count < directory->size && i < 110; i++) {
+		// i = direct blocks
+		// Count number of valid while comparing until all are acocunted for
+		dirent *de = dirent_create();
+
+		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
+
+		int j;
+		for (j = 0; count < d->size && j < 16; j++) {
+			// j = direntry entry
+			if (de->entries[i].block.valid) {
+				count++;
+				if (!strcmp(name, de->entries[i].name))
+					// Found it!
+					dir = de->entries[i];
+					dirent_free(de);
+					if (dir.type == 0) {
+						// If the dirent is for a directory
+						bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
+						return 0;
+					}
+					else {
+						// If the dirent is for a file
+						bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
+						return 1;
+					}
+			}
+		}
+
+		dirent_free(de);
+	}
+
+	if (d->size > 16*110) {
+		// Single indirect
+	}
+
+	if (d->size > 16*110+16*128) {
+		// Double indirect
+	} 
+
+	return -1;
 }

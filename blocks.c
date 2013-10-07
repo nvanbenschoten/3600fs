@@ -130,7 +130,7 @@ void freeblock_free(freeblock *s) {
 
 // Helper functions
 void disk_crash() {
-    perror("ERROR: Your disk image crashed\n");
+    printf("ERROR: Your disk image crashed\n");
     exit(1);
 }
 
