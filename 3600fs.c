@@ -119,7 +119,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	dnode *d = dnode_create(0, 0, 0, 0);
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
 
-	if (strcmp(path, "")) {
+	if (strcmp(pathcpy, "")) {
 		// If path isnt the root directory
 		// Transforms d to the correct directory
 		if(findDNODE(d, pathcpy)) {
