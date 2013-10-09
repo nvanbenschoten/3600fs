@@ -147,8 +147,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		stbuf->st_atime   = matchd->access_time.tv_sec; // access time
 		stbuf->st_mtime   = matchd->modify_time.tv_sec; // modify time
 		stbuf->st_ctime   = matchd->create_time.tv_sec; // create time
-		stbuf->st_size    = BLOCKSIZE*matchd->size; // directory size
-		stbuf->st_blocks  = matchd->size; // directory size in blocks
+		stbuf->st_size    = matchd->size; // directory size
+		stbuf->st_blocks  = (matchd->size + 16 - 1)/(16); // directory size in blocks
 	}
 	else if (ret == 1) {
 		// If the dirent is for a file
@@ -244,10 +244,10 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		int j;
 		for (j = 0; count < d->size && j < 16; j++) {
 			// j = direntry entry
-			if (de->entries[i].block.valid) {
+			if (de->entries[j].block.valid) {
 				// If the entry is valid
 				count++;
-				if(filler(buf, de->entries[i].name, NULL, 0)) {
+				if(filler(buf, de->entries[j].name, NULL, 0)) {
 					dirent_free(de);
 					dnode_free(d);
 					return 0;
