@@ -597,11 +597,11 @@ int findDNODE(dnode *directory, char *path) {
 		int j;
 		for (j = 0; count < directory->size && j < 16; j++) {
 			// j = direntry entry
-			if (de->entries[i].block.valid) {
+			if (de->entries[j].block.valid) {
 				count++;
-				if ((de->entries[i].type = 0) && (!strcmp(de->entries[i].name, searchPath)))
+				if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath)))
 					// If match found, overwrite current dnode
-					bufdread(de->entries[i].block.block, (char *)directory, sizeof(dnode));
+					bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 					free(searchPath);
 					dirent_free(de);
 					if (hitFirstBackslashFlag) {
@@ -653,11 +653,11 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 		int j;
 		for (j = 0; count < directory->size && j < 16; j++) {
 			// j = direntry entry
-			if (de->entries[i].block.valid) {
+			if (de->entries[j].block.valid) {
 				count++;
-				if (!strcmp(name, de->entries[i].name))
+				if (!strcmp(name, de->entries[j].name))
 					// Found it!
-					dir = de->entries[i];
+					dir = de->entries[j];
 					dirent_free(de);
 					if (dir.type == 0) {
 						// If the dirent is for a directory
