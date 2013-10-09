@@ -257,36 +257,66 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-    //int p = 0; // path dir index
-    blocknum root = v->root; // root block number
-    dnode *d = dnode_create(0, 0, 0, 0);
-    bufdread(root.block, (char *) d, BLOCKSIZE);
+
+    // Move down path
+    char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
+
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+		printf("Error seperating the path and filename\n");
+		return -1;
+	}
+
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+
+	if (strcmp(path, "")) {
+		// If path isnt the root directory
+		// Transforms d to the correct directory
+		if(findDNODE(d, pathcpy)) {
+			// If ditectory could not be found
+			printf("Could not find directory\n");
+			return -1;
+		}
+	}
+
+    // What if the dirent is only half full of valid direntries?
+    // Should we fix that to have more efficient memory storage?
+    // Also, what if there are no dirents with empty slots and we need to allocate a new one?
     int d_last_eb = 0;
     while (d->direct[d_last_eb].valid) { // find last directory entry block
         d_last_eb++;
     }
     d_last_eb--;
+
     // read directory entry block
     dirent *de = dirent_create();
-    bufdread(d->direct[d_last_eb].block, (char *) de, BLOCKSIZE);
+    bufdread(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
 
     int d_last_ent = 0;
     while (de->entries[d_last_ent].block.valid) {
         d_last_ent++;
     }
-    path++; // move up path pointer to remove inital /
-    strcpy(de->entries[d_last_ent].name, path);
+    //path++; // move up path pointer to remove inital /
+    strcpy(de->entries[d_last_ent].name, name);
     de->entries[d_last_ent].type = 1;
     de->entries[d_last_ent].block = blocknum_create(v->free.block, 1);
-    bufdwrite(d->direct[d_last_eb].block, (char *) de, BLOCKSIZE);
+    bufdwrite(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
 
-    d->size =+ 1;
+    d->size += 1;
 
-    int writenum = v->free.block; // this could be turned into a function which returns
-    freeblock * f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
-    bufdread(v->free.block, (char *) f, BLOCKSIZE);
-    v->free = f->next;
-    free(f);
+    int writenum = getNextFree(v);
+    if (writenum < 0) {
+    	// Could not get next free block
+    	printf("No free blocks available\n");
+		return -1;
+    }
     
     inode * i = inode_create(0, geteuid(), getegid(), mode);
     clock_gettime(CLOCK_REALTIME, &(d->create_time));
@@ -295,16 +325,19 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     i->direct[0] = v->free;
     i->single_indirect = blocknum_create(0, 0);
     i->double_indirect = blocknum_create(0, 0);
-    bufdwrite(writenum, (char *) i, BLOCKSIZE);
+    bufdwrite(writenum, (char *) i, sizeof(inode));
 
 
-    //writenum = v->free.block; // this could be turned into a function which returns
-    f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
-    bufdread(v->free.block, (char *) f, BLOCKSIZE);
-    v->free = f->next;
-    free(f);
+    // //writenum = v->free.block; // this could be turned into a function which returns
+    // f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
+    // bufdread(v->free.block, (char *) f, BLOCKSIZE);
+    // v->free = f->next;
+    // free(f);
+    getNextFree(v);
 
-    bufdwrite(0, (char *) v, BLOCKSIZE);
+    // Might want to clear out data block incase it isnt clean
+
+    bufdwrite(0, (char *) v, sizeof(vcb));
     // write new file info to directory
 
     // write file to free blocks
@@ -637,4 +670,18 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 	} 
 
 	return -1;
+}
+
+// Params
+// 	v = vcb block
+// Returns
+// 	-1 if no available freeblocks
+// 	0-n if freeblock
+int getNextFree(vcb *v) {
+	int writenum = v->free.block;
+    freeblock * f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
+    bufdread(v->free.block, (char *) f, sizeof(freeblock));
+    v->free = f->next;
+    free(f);
+	return writenum;
 }

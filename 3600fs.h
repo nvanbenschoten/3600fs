@@ -123,5 +123,6 @@ int bufdwrite(int blocknum, const char * buf, int size);
 int seperatePathAndName(char *path, char *name);
 int findDNODE(dnode *directory, char *path);
 int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode);
+int getNextFree(vcb *v);
 
 #endif
