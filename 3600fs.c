@@ -210,7 +210,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 					   off_t offset, struct fuse_file_info *fi)
 {
-	if (path[0] != "/")
+	if (path[0] != '/')
 		return -1;
 
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
@@ -552,7 +552,7 @@ int seperatePathAndName(char *path, char *name) {
 int findDNODE(dnode *directory, char *path) {
 	if (path[0]  != '/')
 		return -1;
-	if (!strcmp(path, "/")
+	if (!strcmp(path, "/"))
 		return 0;
 
 	char *searchPath = (char *)calloc(strlen(path)+1, sizeof(char));
