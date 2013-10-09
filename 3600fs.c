@@ -119,7 +119,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	dnode *d = dnode_create(0, 0, 0, 0);
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
 
-	if (strcmp(pathcpy, "")) {
+	if (strcmp(pathcpy, "/")) {
 		// If path isnt the root directory
 		// Transforms d to the correct directory
 		if(findDNODE(d, pathcpy)) {
@@ -210,14 +210,26 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 					   off_t offset, struct fuse_file_info *fi)
 {
-
-	if (strcmp(path, "/") != 0)
+	if (path[0] != "/")
 		return -1;
+
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
 
 	// Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
-
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
+
+	if (strcmp(pathcpy, "/")) {
+		// If path isnt the root directory
+		// Transforms d to the correct directory
+		if(findDNODE(d, pathcpy)) {
+			// If ditectory could not be found
+			printf("Could not find directory\n");
+			return -1;
+		}
+	}
 
 	// Check in direct
 	int i;
@@ -526,7 +538,7 @@ int seperatePathAndName(char *path, char *name) {
 
 	// Null terminates each string
 	name[j] = '\0';
-	path[i] = '\0';
+	path[i+1] = '\0';
 
 	return 0;
 }
@@ -540,6 +552,8 @@ int seperatePathAndName(char *path, char *name) {
 int findDNODE(dnode *directory, char *path) {
 	if (path[0]  != '/')
 		return -1;
+	if (!strcmp(path, "/")
+		return 0;
 
 	char *searchPath = (char *)calloc(strlen(path)+1, sizeof(char));
 	assert(searchPath != NULL);
