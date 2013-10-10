@@ -621,6 +621,105 @@ int findDNODE(dnode *directory, char *path) {
 		dirent_free(de);
 	}
 
+	if (directory->size > 16*110) {
+		// Single indirect
+		indirect *ind = indirect_create();
+		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
+
+		for (i = 0; count < directory->size && i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			dirent *de = dirent_create();
+			bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
+
+			int j;
+			for (j = 0; count < directory->size && j < 16; j++) {
+				// j = direntry entry
+				if (de->entries[j].block.valid) {
+					count++;
+					if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath)))
+						// If match found, overwrite current dnode
+						bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
+						free(searchPath);
+						dirent_free(de);
+						indirect_free(ind);
+						if (hitFirstBackslashFlag) {
+							// More to path
+							int ret = findDNODE(directory, restOfPath);
+							free(restOfPath);
+							return ret;
+						}
+						else {
+							// Found correct one
+							free(restOfPath);
+							return 0;
+						}
+				}
+			}
+
+			dirent_free(de);
+		}
+
+		indirect_free(ind);
+	}
+
+	if (directory->size > 16*110+16*128) {
+		// Double indirect
+		indirect *firstind = indirect_create();
+		bufdread(directory->single_indirect.block, (char *)firstind, sizeof(indirect));
+		
+		for (i = 0; count < directory->size && i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			indirect *secind = indirect_create();
+			bufdread(ind->blocks[i].block, (char *)sectind, sizeof(indirect));
+
+			int k;
+			for (k = 0; count < directory->size && k < 128; k++) {
+				dirent *de = dirent_create();
+				bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
+
+				int j;
+				for (j = 0; count < directory->size && j < 16; j++) {
+					// j = direntry entry
+					if (de->entries[j].block.valid) {
+						count++;
+						if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath)))
+							// If match found, overwrite current dnode
+							bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
+
+							// Free variables
+							free(searchPath);
+							dirent_free(de);
+							indirect_free(firstind);
+							indirect_free(secind);
+
+							if (hitFirstBackslashFlag) {
+								// More to path
+								int ret = findDNODE(directory, restOfPath);
+								free(restOfPath);
+								return ret;
+							}
+							else {
+								// Found correct one
+								free(restOfPath);
+								return 0;
+							}
+					}
+				}
+
+				dirent_free(de);
+			}
+
+			indirect_free(secind);
+			
+		}
+
+		indirect_free(ind);
+	} 
+
 	free(searchPath);
 	free(restOfPath);
 
