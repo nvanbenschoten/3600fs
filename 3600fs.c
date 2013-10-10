@@ -674,7 +674,7 @@ int findDNODE(dnode *directory, char *path) {
 			// Count number of valid while comparing until all are acocunted for
 
 			indirect *secind = indirect_create();
-			bufdread(ind->blocks[i].block, (char *)sectind, sizeof(indirect));
+			bufdread(firstind->blocks[i].block, (char *)sectind, sizeof(indirect));
 
 			int k;
 			for (k = 0; count < directory->size && k < 128; k++) {
