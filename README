@@ -1,5 +1,12 @@
 3600fs
 
+Milestone 2 Progress:
+[x] vfs_mount - seems okay, doesnt do integrity checking though for final submission
+[ ] vfs_create - still needs some edge cases and minor functionality
+[ ] vfs_delete - completely untouched
+[ ] vfs_readdir - inital code written
+[ ] vfs_getattr - done? not sure
+
 Nathaniel Dempkowski and Nathan Vanbenschoten
 
 We have chosen to implement the inode-based file system layout.

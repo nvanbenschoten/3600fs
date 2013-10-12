@@ -329,7 +329,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     bufdread(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
 
     int d_last_ent = 0;
-    while (d_last_ent < sizeof(dirent)/sizeof(direntry) && de->entries[d_last_ent].block.valid) {
+    while (((unsigned int)d_last_ent < (unsigned int)sizeof(dirent)/sizeof(direntry)) &&
+        de->entries[d_last_ent].block.valid) {
         d_last_ent++;
     }
     if (d_last_ent == sizeof(dirent)/sizeof(direntry)) { // if need to allocate a new dirent block
@@ -347,6 +348,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
         if (getNextFree(v) < 0) {
             printf("No free blocks available\n");
             return -1;
+        }
         
         // if all those are valid go to next indirect etc
         // could probably use find next invalid function, will run into problems with reusing
@@ -362,7 +364,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     d->size += 1;
 
     int writenum;// = getNextFree(v);
-    if (writenum = getnextFree(v) < 0) {
+    if ((writenum = getNextFree(v)) < 0) {
     	// Could not get next free block
     	printf("No free blocks available\n");
 	return -1;
