@@ -122,7 +122,7 @@ int bufdwrite(int blocknum, const char * buf, int size);
 // File system specific helper functions
 int seperatePathAndName(char *path, char *name);
 int findDNODE(dnode *directory, char *path);
-blocknum getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, int *ret);
+int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *ret, int deleteFlag);
 int getNextFree(vcb *v);
 int releaseFree(vcb *v, blocknum block);
 

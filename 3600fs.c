@@ -132,9 +132,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
 
-
-	int ret;
-    getNODE(d, name, matchd, matchi, &ret);
+    blocknum block;
+	int ret = getNODE(d, name, matchd, matchi, &block, 0);
 	dnode_free(d);
 
 	// Check to see if match is valid
@@ -303,8 +302,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     // check if file already exists
     dnode * temp_d = dnode_create(0, 0, 0, 0);
     inode * temp_i = inode_create(0, 0, 0, 0);
-    int ret; 
-    getNODE(d, name, temp_d, temp_i, &ret);
+    blocknum block;
+    int ret = getNODE(d, name, temp_d, temp_i, &block, 0);
     if (ret >= 0) {
         // COMMENT Made it so it file or dir match, it returns
         dnode_free(d);
@@ -461,10 +460,6 @@ static int vfs_delete(const char *path)
     /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
             AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
 
-    // AHHHHHHHHHHHHHHHHHHHHHH well this is gonna make our disk layout confusing as shit
-    // also again will need to implement new scheme for returning blocknums with finds
-    // for this to really work
-
     // Move down path
     char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
     assert(pathcpy != NULL);
@@ -495,9 +490,9 @@ static int vfs_delete(const char *path)
 
     inode *i_node = inode_create(0, 0, 0, 0);
     dnode *d_temp = dnode_create(0, 0, 0, 0);
-    int ret;
-    blocknum block = getNODE(d, name, d_temp, i_node, &ret);
-    if (ret < 0) { // if didnt find matching file node
+    blocknum block;
+    int ret = getNODE(d, name, d_temp, i_node, &block, 1);
+    if (ret != 1) { // if didnt find matching file node
         // what does findNODE return if both match??
         inode_free(i_node);
         dnode_free(d_temp);
@@ -507,50 +502,26 @@ static int vfs_delete(const char *path)
         printf("Could not find file to delete or file is a directory");
         return -1;
     }
-    // need to free data blocks for file
+
+    // Frees data blocks
     int i;
     unsigned int count = 0;
     for (i = 0; count < i_node->size && i < 110; i++) {
         // i = direct blocks
         // Count number of valid while comparing until all are acocunted for
-        dirent *de = dirent_create();
-
-        bufdread(i_node->direct[i].block, (char *)de, sizeof(dirent));
-
-        int j;
-        for (j = 0; count < i_node->size && j < 16; j++) {
-            // j = direntry entry
-            if (de->entries[j].block.valid) {
-                count++;
-                // Free data here
-            }
+        if (i_node->direct[i].valid) {
+            count++;   
+            // Free data here
+            releaseFree(v, i_node->direct[i]);
         }
-
-        dirent_free(de);
     }
 
-
-    freeblock *f;
-    // while (i_node->direct[data_block].valid) { // this is probably going to memory leak
-    //     // -> write over blocks as free and add as first in freelist
-    //     f = freeblock_create(v->free);
-    //     bufdwrite(i_node->direct[data_block].block, (char *) f, sizeof(freeblock));
-    //     v->free = i_node->direct[data_block];
-    //     // -> maybe mark blocknums as invalid in inode for posterity
-    //     i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
-    //     // crash during this loop it could be useful maybe? but probably not
-    //     freeblock_free(f);
-    //     data_block++;
-    // }
     // -> then need to also do same for single and double indirects...
-    // TODO: code that
-    // then need to free actual inode which is just writing another free block and adding it
-    f = freeblock_create(v->free);
-    // bufdwrite(); // need to have blocknums here from findNODE
-    free(f);
-    // THEN NEED TO GET THE DIRENT DIRENTRY FOR THE INODE AND MARK IT AS INVALID and we're
-    // same issue as above
-    // probably okay at that point
+
+
+    // Frees inode block itself
+    releaseFree(v, block);
+
     inode_free(i_node);
     dnode_free(d_temp);
     dnode_free(d);
@@ -875,12 +846,14 @@ int findDNODE(dnode *directory, char *path) {
 // 	name = name of node looking for
 // 	searchDnode = dnode will be filled in if found
 // 	searchInode = inode will be filled in if found
+//  blocknum = blocknum if valid
+//  deleteFlag = if match reference should be set to invalid
 // Returns
-// 	blocknum = valid bit will determin if match found
-//  Check searchDnode and searchInode for which one found
-blocknum getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, int *ret) {
-	blocknum block = blocknum_create(0, 0);
-    *ret = -1;
+// -1 for not found
+// 0 for directory
+// 1 for file
+int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *ret, int deleteFlag) {
+    *ret = blocknum_create(0, 0);
 
     direntry dir;
 	dir.block.valid = 0;
@@ -903,22 +876,24 @@ blocknum getNODE(dnode *directory, char *name, dnode *searchDnode, inode *search
 				if (!strcmp(name, de->entries[j].name))
 					// Found it!
 					dir = de->entries[j];
-					dirent_free(de);
+                    dirent_free(de);
+
+                    if (deleteFlag)
+                        dir.block.valid = 0;
+
 					if (dir.type == 0) {
 						// If the dirent is for a directory
 						bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
-                        *ret = 0;
-                        block.block = dir.block.block;
-                        block.valid = 1;
-						return block;
+                        ret->block = dir.block.block;
+                        ret->valid = 1;
+						return 0;
 					}
 					else {
 						// If the dirent is for a file
 						bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
-                        *ret = 1;
-                        block.block = dir.block.block;
-                        block.valid = 1;
-						return block;
+                        block->block = dir.block.block;
+                        block->valid = 1;
+						return 1;
 					}
 			}
 		}
@@ -934,7 +909,7 @@ blocknum getNODE(dnode *directory, char *name, dnode *searchDnode, inode *search
 		// Double indirect
 	} 
 
-	return block;
+	return -1;
 }
 
 // Params
@@ -956,10 +931,6 @@ int releaseFree(vcb *v, blocknum block) {
     bufdwrite(block.block, (char *) f, sizeof(freeblock));
     block.valid = 1;
     v->free = block;
-    // -> maybe mark blocknums as invalid in inode for posterity
-    //i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
-    // crash during this loop it could be useful maybe? but probably not
     freeblock_free(f);
-
     return 0;
 }
