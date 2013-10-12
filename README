@@ -6,8 +6,7 @@ Milestone 2 Progress:
 [ ] vfs_delete - half written need to change getNODE before can finish
 [ ] vfs_readdir - inital code written
 [ ] vfs_getattr - done? not sure
-[ ] getNODE - this needs to return the blocknum it finds, and can use the valid bit as a success
-if its not valid then we can use the block as an error code, ideally would also leave either the INODE or DNODE pointer as NULL to check which one it found, but then run into an issue where it could find one of each with the same name, so might just be better to split them into getINODE and getDNODE, but dont know how that might impact other functionality
+[ ] getNODE - this needs to return the blocknum it finds, and can use the valid bit as a success if its not valid then we can use the block as an error code, ideally would also leave either the INODE or DNODE pointer as NULL to check which one it found, but then run into an issue where it could find one of each with the same name, so might just be better to split them into getINODE and getDNODE, but dont know how that might impact other functionality
 [ ] findDNODE - would probably benefit from changes similar to getNODE
 
 Nathaniel Dempkowski and Nathan Vanbenschoten
