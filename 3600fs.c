@@ -499,7 +499,7 @@ static int vfs_delete(const char *path)
     blocknum block = getNODE(d, name, d_temp, i_node, &ret);
     if (ret < 0) { // if didnt find matching file node
         // what does findNODE return if both match??
-        inode_free(i);
+        inode_free(i_node);
         dnode_free(d_temp);
         dnode_free(d);
         free(name);
@@ -515,10 +515,10 @@ static int vfs_delete(const char *path)
         // Count number of valid while comparing until all are acocunted for
         dirent *de = dirent_create();
 
-        bufdread(i->direct[i].block, (char *)de, sizeof(dirent));
+        bufdread(i_node->direct[i].block, (char *)de, sizeof(dirent));
 
         int j;
-        for (j = 0; count < directory->size && j < 16; j++) {
+        for (j = 0; count < i_node->size && j < 16; j++) {
             // j = direntry entry
             if (de->entries[j].block.valid) {
                 count++;
@@ -531,17 +531,17 @@ static int vfs_delete(const char *path)
 
 
     freeblock *f;
-    while (i_node->direct[data_block].valid) { // this is probably going to memory leak
-        // -> write over blocks as free and add as first in freelist
-        f = freeblock_create(v->free);
-        bufdwrite(i_node->direct[data_block].block, (char *) f, sizeof(freeblock));
-        v->free = i_node->direct[data_block];
-        // -> maybe mark blocknums as invalid in inode for posterity
-        i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
-        // crash during this loop it could be useful maybe? but probably not
-        freeblock_free(f);
-        data_block++;
-    }
+    // while (i_node->direct[data_block].valid) { // this is probably going to memory leak
+    //     // -> write over blocks as free and add as first in freelist
+    //     f = freeblock_create(v->free);
+    //     bufdwrite(i_node->direct[data_block].block, (char *) f, sizeof(freeblock));
+    //     v->free = i_node->direct[data_block];
+    //     // -> maybe mark blocknums as invalid in inode for posterity
+    //     i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
+    //     // crash during this loop it could be useful maybe? but probably not
+    //     freeblock_free(f);
+    //     data_block++;
+    // }
     // -> then need to also do same for single and double indirects...
     // TODO: code that
     // then need to free actual inode which is just writing another free block and adding it
