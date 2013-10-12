@@ -852,8 +852,8 @@ int findDNODE(dnode *directory, char *path) {
 // -1 for not found
 // 0 for directory
 // 1 for file
-int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *ret, int deleteFlag) {
-    *ret = blocknum_create(0, 0);
+int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag) {
+    *retBlock = blocknum_create(0, 0);
 
     direntry dir;
 	dir.block.valid = 0;
@@ -884,15 +884,15 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 					if (dir.type == 0) {
 						// If the dirent is for a directory
 						bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
-                        ret->block = dir.block.block;
-                        ret->valid = 1;
+                        retBlock->block = dir.block.block;
+                        retBlock->valid = 1;
 						return 0;
 					}
 					else {
 						// If the dirent is for a file
 						bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
-                        block->block = dir.block.block;
-                        block->valid = 1;
+                        retBlock->block = dir.block.block;
+                        retBlock->valid = 1;
 						return 1;
 					}
 			}
