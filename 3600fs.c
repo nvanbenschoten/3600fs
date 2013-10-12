@@ -272,31 +272,48 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
     // Move down path
     char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
-	assert(pathcpy != NULL);
-	strcpy(pathcpy, path);
+    assert(pathcpy != NULL);
+    strcpy(pathcpy, path);
 
-	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
-	assert(name != NULL);
+    char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+    assert(name != NULL);
 
-	// Seperating the directory name from the file/directory name
-	if (seperatePathAndName(pathcpy, name)) {
-		printf("Error seperating the path and filename\n");
-		return -1;
-	}
+    // Seperating the directory name from the file/directory name
+    if (seperatePathAndName(pathcpy, name)) {
+            printf("Error seperating the path and filename\n");
+            return -1;
+    }
 
-	// Read vcb
-	dnode *d = dnode_create(0, 0, 0, 0);
-	bufdread(v->root.block, (char *)d, sizeof(dnode));
+    // Read vcb
+    dnode *d = dnode_create(0, 0, 0, 0);
+    bufdread(v->root.block, (char *)d, sizeof(dnode));
 
-	if (strcmp(path, "")) {
-		// If path isnt the root directory
-		// Transforms d to the correct directory
-		if(findDNODE(d, pathcpy)) {
-			// If ditectory could not be found
-			printf("Could not find directory\n");
-			return -1;
-		}
-	}
+    if (strcmp(path, "")) {
+            // If path isnt the root directory
+            // Transforms d to the correct directory
+            if(findDNODE(d, pathcpy)) {
+                    // If ditectory could not be found
+                    printf("Could not find directory\n");
+                    return -1;
+            }
+    }
+
+    // check if file already exists
+    dnode * temp_d = dnode_create(0, 0, 0, 0);
+    inode * temp_i = inode_create(0, 0, 0, 0);
+    if (getNODE(d, name, temp_d, temp_i) == 1) {
+        dnode_free(d);
+        dnode_free(temp_d);
+        inode_free(temp_i);
+        // do pathcpy and name need to be freed?
+        free(pathcpy);
+        free(name);
+        return -EEXIST;
+    }
+    else {
+        dnode_free(temp_d);
+        inode_free(temp_i);
+    }
 
     // What if the dirent is only half full of valid direntries?
     // Should we fix that to have more efficient memory storage?
@@ -312,10 +329,31 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     bufdread(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
 
     int d_last_ent = 0;
-    while (de->entries[d_last_ent].block.valid) {
+    while (d_last_ent < sizeof(dirent)/sizeof(direntry) && de->entries[d_last_ent].block.valid) {
         d_last_ent++;
     }
-    //path++; // move up path pointer to remove inital /
+    if (d_last_ent == sizeof(dirent)/sizeof(direntry)) { // if need to allocate a new dirent block
+        // modify d_last_eb and d_last_ent to point to new block & entry
+        while (d->direct[d_last_eb].valid) {
+            d_last_eb++;
+        }
+        d->direct[d_last_eb] = v->free; // set next dirent blocknum to be next free block
+        dirent *de_new = dirent_create(); // create new dirent
+        free(de); // free the old dirent as we are replacing it
+        de = de_new; // reassign old dirent to new dirent
+        d_last_ent = 0; // set last entry to be first entry because new dirent
+        d->size += 1; // add new block to size
+        
+        if (getNextFree(v) < 0) {
+            printf("No free blocks available\n");
+            return -1;
+        
+        // if all those are valid go to next indirect etc
+        // could probably use find next invalid function, will run into problems with reusing
+        // dirent blocks as well...
+    }
+    
+    // write info to dirent block
     strcpy(de->entries[d_last_ent].name, name);
     de->entries[d_last_ent].type = 1;
     de->entries[d_last_ent].block = blocknum_create(v->free.block, 1);
@@ -323,11 +361,11 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
     d->size += 1;
 
-    int writenum = getNextFree(v);
-    if (writenum < 0) {
+    int writenum;// = getNextFree(v);
+    if (writenum = getnextFree(v) < 0) {
     	// Could not get next free block
     	printf("No free blocks available\n");
-		return -1;
+	return -1;
     }
     
     inode * i = inode_create(0, geteuid(), getegid(), mode);
@@ -346,10 +384,13 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     // v->free = f->next;
     // free(f);
     getNextFree(v);
-
-    // Might want to clear out data block incase it isnt clean
-
+    // update vcb
     bufdwrite(0, (char *) v, sizeof(vcb));
+    // update dnode - need to get dnode blocknum somehow so should update getDNODE to do that
+    // could potentially send back a blocknum and just use the valid flag to indicate if the
+    // dnode was found
+    // could also modify dnode and inode structs to hold their blocknum
+
     // write new file info to directory
 
     // write file to free blocks
