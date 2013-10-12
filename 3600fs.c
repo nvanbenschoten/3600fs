@@ -118,11 +118,12 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	// Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
+    blocknum dirBlock = blocknum_create(v->root.block, 1);
 
 	if (strcmp(pathcpy, "/")) {
 		// If path isnt the root directory
 		// Transforms d to the correct directory
-		if(findDNODE(d, pathcpy)) {
+		if(findDNODE(d, pathcpy, &dirBlock)) {
 			// If directory could not be found
 			printf("Could not find directory\n");
 			return -1;
@@ -221,11 +222,12 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	// Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
+    blocknum block = blocknum_create(v->root.block, 1);
 
 	if (strcmp(pathcpy, "/")) {
 		// If path isnt the root directory
 		// Transforms d to the correct directory
-		if(findDNODE(d, pathcpy)) {
+		if(findDNODE(d, pathcpy, &block)) {
 			// If ditectory could not be found
 			printf("Could not find directory\n");
 			return -1;
@@ -288,11 +290,12 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     // Read vcb
     dnode *d = dnode_create(0, 0, 0, 0);
     bufdread(v->root.block, (char *)d, sizeof(dnode));
+    blocknum dirBlock = blocknum_create(v->root.block, 1);
 
     if (strcmp(path, "")) {
             // If path isnt the root directory
             // Transforms d to the correct directory
-            if(findDNODE(d, pathcpy)) {
+            if(findDNODE(d, pathcpy, &dirBlock)) {
                     // If ditectory could not be found
                     printf("Could not find directory\n");
                     return -1;
@@ -366,7 +369,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     de->entries[d_last_ent].block = blocknum_create(v->free.block, 1);
     bufdwrite(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
 
+    // Update dnode
     d->size += 1;
+    bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
 
     int writenum;// = getNextFree(v);
     if ((writenum = getNextFree(v)) < 0) {
@@ -384,23 +389,12 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     i->double_indirect = blocknum_create(0, 0);
     bufdwrite(writenum, (char *) i, sizeof(inode));
 
-
-    // //writenum = v->free.block; // this could be turned into a function which returns
-    // f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
-    // bufdread(v->free.block, (char *) f, BLOCKSIZE);
-    // v->free = f->next;
-    // free(f);
     getNextFree(v);
+
     // update vcb
     bufdwrite(0, (char *) v, sizeof(vcb));
-    // update dnode - need to get dnode blocknum somehow so should update getDNODE to do that
-    // could potentially send back a blocknum and just use the valid flag to indicate if the
-    // dnode was found
-    // could also modify dnode and inode structs to hold their blocknum
 
     // write new file info to directory
-
-    // write file to free blocks
 
     // free all the stuff
     dnode_free(d);
@@ -478,10 +472,12 @@ static int vfs_delete(const char *path)
     dnode *d = dnode_create(0, 0, 0, 0);
     bufdread(v->root.block, (char *)d, sizeof(dnode));
 
+    blocknum dirBlock = blocknum_create(v->root.block, 1);
+
     if (strcmp(path, "")) {
             // If path isnt the root directory
             // Transforms d to the correct directory
-            if(findDNODE(d, pathcpy)) {
+            if(findDNODE(d, pathcpy, &dirBlock)) {
                     // If directory could not be found
                     printf("Could not find directory\n");
                     return -1;
@@ -521,6 +517,9 @@ static int vfs_delete(const char *path)
 
     // Frees inode block itself
     releaseFree(v, block);
+
+    // update vcb
+    bufdwrite(0, (char *) v, sizeof(vcb));
 
     inode_free(i_node);
     dnode_free(d_temp);
@@ -664,7 +663,7 @@ int seperatePathAndName(char *path, char *name) {
 // Returns
 // 	-1 if no match found
 // 	0 if match found
-int findDNODE(dnode *directory, char *path) {
+int findDNODE(dnode *directory, char *path, blocknum *block) {
 	if (path[0]  != '/')
 		return -1;
 	if (!strcmp(path, "/"))
@@ -714,14 +713,17 @@ int findDNODE(dnode *directory, char *path) {
 			// j = direntry entry
 			if (de->entries[j].block.valid) {
 				count++;
-				if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath)))
+				if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
 					// If match found, overwrite current dnode
+                    block->block = de->entries[j].block.block;
+                    block->block = de->entries[j].block.valid;
+
 					bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 					free(searchPath);
 					dirent_free(de);
 					if (hitFirstBackslashFlag) {
 						// More to path
-						int ret = findDNODE(directory, restOfPath);
+						int ret = findDNODE(directory, restOfPath, block);
 						free(restOfPath);
 						return ret;
 					}
@@ -730,6 +732,7 @@ int findDNODE(dnode *directory, char *path) {
 						free(restOfPath);
 						return 0;
 					}
+                }
 			}
 		}
 
@@ -753,15 +756,18 @@ int findDNODE(dnode *directory, char *path) {
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
-					if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath)))
+					if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
 						// If match found, overwrite current dnode
+                        block->block = de->entries[j].block.block;
+                        block->block = de->entries[j].block.valid;
+
 						bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 						free(searchPath);
 						dirent_free(de);
 						indirect_free(ind);
 						if (hitFirstBackslashFlag) {
 							// More to path
-							int ret = findDNODE(directory, restOfPath);
+							int ret = findDNODE(directory, restOfPath, block);
 							free(restOfPath);
 							return ret;
 						}
@@ -770,6 +776,7 @@ int findDNODE(dnode *directory, char *path) {
 							free(restOfPath);
 							return 0;
 						}
+                    }
 				}
 			}
 
@@ -801,10 +808,13 @@ int findDNODE(dnode *directory, char *path) {
 					// j = direntry entry
 					if (de->entries[j].block.valid) {
 						count++;
-						if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath)))
+						if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
 							// If match found, overwrite current dnode
-							bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 
+                            block->block = de->entries[j].block.block;
+                            block->block = de->entries[j].block.valid;
+							
+                            bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 							// Free variables
 							free(searchPath);
 							dirent_free(de);
@@ -813,7 +823,7 @@ int findDNODE(dnode *directory, char *path) {
 
 							if (hitFirstBackslashFlag) {
 								// More to path
-								int ret = findDNODE(directory, restOfPath);
+								int ret = findDNODE(directory, restOfPath, block);
 								free(restOfPath);
 								return ret;
 							}
@@ -822,6 +832,7 @@ int findDNODE(dnode *directory, char *path) {
 								free(restOfPath);
 								return 0;
 							}
+                        }
 					}
 				}
 
