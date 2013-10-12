@@ -954,9 +954,12 @@ int getNextFree(vcb *v) {
 int releaseFree(vcb *v, blocknum block) {
     freeblock *f = freeblock_create(v->free);
     bufdwrite(block.block, (char *) f, sizeof(freeblock));
-    v->free = block.block;
+    block.valid = 1;
+    v->free = block;
     // -> maybe mark blocknums as invalid in inode for posterity
-    i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
+    //i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
     // crash during this loop it could be useful maybe? but probably not
     freeblock_free(f);
+
+    return 0;
 }
