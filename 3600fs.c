@@ -123,7 +123,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		// If path isnt the root directory
 		// Transforms d to the correct directory
 		if(findDNODE(d, pathcpy)) {
-			// If ditectory could not be found
+			// If directory could not be found
 			printf("Could not find directory\n");
 			return -1;
 		}
@@ -452,11 +452,83 @@ static int vfs_write(const char *path, const char *buf, size_t size,
  */
 static int vfs_delete(const char *path)
 {
+    /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
+            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
 
-	/* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
-		AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
+    // AHHHHHHHHHHHHHHHHHHHHHH well this is gonna make our disk layout confusing as shit
+    // also again will need to implement new scheme for returning blocknums with finds
+    // for this to really work
 
-	return 0;
+    // Move down path
+    char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+    assert(pathcpy != NULL);
+    strcpy(pathcpy, path);
+
+    char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+    assert(name != NULL);
+
+    // Seperating the directory name from the file/directory name
+    if (seperatePathAndName(pathcpy, name)) {
+            printf("Error seperating the path and filename\n");
+            return -1;
+    }
+
+    // Read vcb
+    dnode *d = dnode_create(0, 0, 0, 0);
+    bufdread(v->root.block, (char *)d, sizeof(dnode));
+
+    if (strcmp(path, "")) {
+            // If path isnt the root directory
+            // Transforms d to the correct directory
+            if(findDNODE(d, pathcpy)) {
+                    // If directory could not be found
+                    printf("Could not find directory\n");
+                    return -1;
+            }
+    }
+
+    inode *i = inode_create(0, 0, 0, 0);
+    dnode *d_temp = dnode_create(0, 0, 0, 0);
+    if (getNODE(d, name, d_temp, i) != 1) { // if didnt find matching file node
+        // what does findNODE return if both match??
+        inode_free(i);
+        dnode_free(d_temp);
+        dnode_free(d);
+        free(name);
+        free(pathcpy);
+        printf("Could not find file to delete or file is a directory");
+        return -1;
+    }
+    // need to free data blocks for file
+    int data_block; // this variable is poorly named
+    freeblock *f;
+    while (i->direct[data_block].valid) { // this is probably going to memory leak
+        // -> write over blocks as free and add as first in freelist
+        f = freeblock_create(v->free);
+        bufdwrite(i->direct[data_block].block, (char *) f, sizeof(freeblock));
+        v->free = i->direct[data_block];
+        // -> maybe mark blocknums as invalid in inode for posterity
+        i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
+        // crash during this loop it could be useful maybe? but probably not
+        freeblock_free(f);
+        data_block++;
+    }
+    // -> then need to also do same for single and double indirects...
+    // TODO: code that
+    // then need to free actual inode which is just writing another free block and adding it
+    f = freeblock_create(v->free);
+    // bufdwrite(); // need to have blocknums here from findNODE
+    free(f);
+    // THEN NEED TO GET THE DIRENT DIRENTRY FOR THE INODE AND MARK IT AS INVALID and we're
+    // same issue as above
+    // probably okay at that point
+    inode_free(i);
+    dnode_free(d_temp);
+    dnode_free(d);
+    free(name);
+    free(pathcpy);
+
+    return 0;
 }
 
 /*
