@@ -301,7 +301,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     // check if file already exists
     dnode * temp_d = dnode_create(0, 0, 0, 0);
     inode * temp_i = inode_create(0, 0, 0, 0);
-    if (getNODE(d, name, temp_d, temp_i) == 1) {
+    int ret = getNODE(d, name, temp_d, temp_i);
+    if (ret == 1 || ret == 0) {
+        // COMMENT Made it so it file or dir match, it returns
         dnode_free(d);
         dnode_free(temp_d);
         inode_free(temp_i);
@@ -336,6 +338,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     if (d_last_ent == sizeof(dirent)/sizeof(direntry)) { // if need to allocate a new dirent block
         // modify d_last_eb and d_last_ent to point to new block & entry
         while (d->direct[d_last_eb].valid) {
+            // COMMENT This is going to have to be recursive for it to truly work
             d_last_eb++;
         }
         d->direct[d_last_eb] = v->free; // set next dirent blocknum to be next free block
