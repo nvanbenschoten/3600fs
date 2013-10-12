@@ -132,14 +132,14 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
 
-	int ret = getNODE(d, name, matchd, matchi);
+	blocknum ret = getNODE(d, name, matchd, matchi);
 	dnode_free(d);
 
 	// Check to see if match is valid
-	if (ret == -1) {
+	if (ret.valid == 0) {
 		return -ENOENT;
 	}
-	else if (ret == 0) {
+	else if (matchi == NULL) {
 		// If the dirent is for a directory
 		stbuf->st_mode    = matchd->mode | S_IFDIR; // Directory node
 		stbuf->st_uid     = matchd->user; // directory uid
@@ -150,7 +150,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		stbuf->st_size    = matchd->size; // directory size
 		stbuf->st_blocks  = (matchd->size + 16 - 1)/(16); // directory size in blocks
 	}
-	else if (ret == 1) {
+	else if (matchd == NULL) {
 		// If the dirent is for a file
 		stbuf->st_mode    = matchi->mode | S_IFREG;
 		stbuf->st_uid     = matchi->user; // file uid
@@ -301,8 +301,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     // check if file already exists
     dnode * temp_d = dnode_create(0, 0, 0, 0);
     inode * temp_i = inode_create(0, 0, 0, 0);
-    int ret = getNODE(d, name, temp_d, temp_i);
-    if (ret == 1 || ret == 0) {
+    blocknum ret = getNODE(d, name, temp_d, temp_i);
+    if (ret.valid) {
         // COMMENT Made it so it file or dir match, it returns
         dnode_free(d);
         dnode_free(temp_d);
@@ -492,7 +492,8 @@ static int vfs_delete(const char *path)
 
     inode *i = inode_create(0, 0, 0, 0);
     dnode *d_temp = dnode_create(0, 0, 0, 0);
-    if (getNODE(d, name, d_temp, i) != 1) { // if didnt find matching file node
+    blocknum ret = getNODE(d, name, d_temp, i);
+    if (!ret.valid) { // if didnt find matching file node
         // what does findNODE return if both match??
         inode_free(i);
         dnode_free(d_temp);
@@ -850,11 +851,12 @@ int findDNODE(dnode *directory, char *path) {
 // 	searchDnode = dnode will be filled in if found
 // 	searchInode = inode will be filled in if found
 // Returns
-// 	-1 if no match found
-// 	0 if directory match found (searchDnode will be filled in)
-// 	1 if file match found (searchInode will be filled in)
-int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode) {
-	direntry dir;
+// 	blocknum = valid bit will determin if match found
+//  Check searchDnode and searchInode for which one found
+blocknum getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode) {
+	blocknum block = blocknum_create(0, 0);
+
+    direntry dir;
 	dir.block.valid = 0;
 
 	// Check in directory
@@ -879,12 +881,18 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 					if (dir.type == 0) {
 						// If the dirent is for a directory
 						bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
-						return 0;
+                        searchInode = NULL;
+                        block.block = dir.block.block;
+                        block.valid = 1;
+						return block;
 					}
 					else {
 						// If the dirent is for a file
 						bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
-						return 1;
+                        searchDnode = NULL;
+                        block.block = dir.block.block;
+                        block.valid = 1;
+						return block;
 					}
 			}
 		}
@@ -900,7 +908,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 		// Double indirect
 	} 
 
-	return -1;
+	return block;
 }
 
 // Params
