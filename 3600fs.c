@@ -493,10 +493,10 @@ static int vfs_delete(const char *path)
             }
     }
 
-    inode *i = inode_create(0, 0, 0, 0);
+    inode *i_node = inode_create(0, 0, 0, 0);
     dnode *d_temp = dnode_create(0, 0, 0, 0);
     int ret;
-    getNODE(d, name, d_temp, i, &ret);
+    blocknum block = getNODE(d, name, d_temp, i_node, &ret);
     if (ret < 0) { // if didnt find matching file node
         // what does findNODE return if both match??
         inode_free(i);
@@ -508,13 +508,34 @@ static int vfs_delete(const char *path)
         return -1;
     }
     // need to free data blocks for file
-    int data_block; // this variable is poorly named
+    int i;
+    unsigned int count = 0;
+    for (i = 0; count < i_node->size && i < 110; i++) {
+        // i = direct blocks
+        // Count number of valid while comparing until all are acocunted for
+        dirent *de = dirent_create();
+
+        bufdread(i->direct[i].block, (char *)de, sizeof(dirent));
+
+        int j;
+        for (j = 0; count < directory->size && j < 16; j++) {
+            // j = direntry entry
+            if (de->entries[j].block.valid) {
+                count++;
+                // Free data here
+            }
+        }
+
+        dirent_free(de);
+    }
+
+
     freeblock *f;
-    while (i->direct[data_block].valid) { // this is probably going to memory leak
+    while (i_node->direct[data_block].valid) { // this is probably going to memory leak
         // -> write over blocks as free and add as first in freelist
         f = freeblock_create(v->free);
-        bufdwrite(i->direct[data_block].block, (char *) f, sizeof(freeblock));
-        v->free = i->direct[data_block];
+        bufdwrite(i_node->direct[data_block].block, (char *) f, sizeof(freeblock));
+        v->free = i_node->direct[data_block];
         // -> maybe mark blocknums as invalid in inode for posterity
         i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
         // crash during this loop it could be useful maybe? but probably not
@@ -530,7 +551,7 @@ static int vfs_delete(const char *path)
     // THEN NEED TO GET THE DIRENT DIRENTRY FOR THE INODE AND MARK IT AS INVALID and we're
     // same issue as above
     // probably okay at that point
-    inode_free(i);
+    inode_free(i_node);
     dnode_free(d_temp);
     dnode_free(d);
     free(name);
@@ -928,4 +949,14 @@ int getNextFree(vcb *v) {
     v->free = f->next;
     free(f);
 	return writenum;
+}
+
+int releaseFree(vcb *v, blocknum block) {
+    freeblock *f = freeblock_create(v->free);
+    bufdwrite(block.block, (char *) f, sizeof(freeblock));
+    v->free = block.block;
+    // -> maybe mark blocknums as invalid in inode for posterity
+    i->direct[data_block].valid = 0; // this is probably unnecessary, but in the event of a
+    // crash during this loop it could be useful maybe? but probably not
+    freeblock_free(f);
 }
