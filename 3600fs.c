@@ -306,7 +306,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
             for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
                 // j = direntry entry
                 count++;
-                printf("Double Indirect nodes %i : %i : %i\n", count, k, i);
+                printf("Double Indirect nodes %i : %i : %i\n", count, k, j);
                 if (de->entries[j].block.valid) {
                     // If the entry is valid
                     if(filler(buf, de->entries[j].name, NULL, count)) {
