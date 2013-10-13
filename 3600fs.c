@@ -234,7 +234,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		}
 	}
 
-	// Check in direct
+	// Check in directs
 	unsigned int count = offset;
 	while (count < 110*16) {
 
@@ -265,6 +265,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		}
 	}
 
+	// Single indirection
 	if (d->single_indirect.valid) {
 		indirect *ind = indirect_create();
 		bufdread(d->single_indirect.block, (char *)ind, sizeof(indirect));
@@ -304,7 +305,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		count += 128*16;
 	}
 
-
+	// Double indirection
 	if (d->double_indirect.valid) {
 
 		indirect *firstind = indirect_create();
@@ -983,7 +984,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 			// j = direntry entry
 			if (de->entries[j].block.valid) {
 				count++;
-				if (!strcmp(name, de->entries[j].name))
+				if (!strcmp(name, de->entries[j].name)) {
 					// Found it!
 					dir = de->entries[j];
 					dirent_free(de);
@@ -1005,6 +1006,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 						retBlock->valid = 1;
 						return 1;
 					}
+				}
 			}
 		}
 
@@ -1013,10 +1015,113 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 	if (directory->size > 16*110) {
 		// Single indirect
+		// Single indirect
+		indirect *ind = indirect_create();
+		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
+
+		for (i = 0; count < directory->size && i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			dirent *de = dirent_create();
+			bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
+
+			int j;
+			for (j = 0; count < directory->size && j < 16; j++) {
+				// j = direntry entry
+				if (de->entries[j].block.valid) {
+					count++;
+					if (!strcmp(de->entries[j].name, searchPath)) {
+						// Found it!
+						dir = de->entries[j];
+						dirent_free(de);
+						indirect_free(ind);
+
+						if (deleteFlag)
+							dir.block.valid = 0;
+
+						if (dir.type == 0) {
+							// If the dirent is for a directory
+							bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
+							retBlock->block = dir.block.block;
+							retBlock->valid = 1;
+							return 0;
+						}
+						else {
+							// If the dirent is for a file
+							bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
+							retBlock->block = dir.block.block;
+							retBlock->valid = 1;
+							return 1;
+						}
+					}
+				}
+			}
+
+			dirent_free(de);
+		}
+
+		indirect_free(ind);
 	}
 
 	if (directory->size > 16*110+16*128) {
 		// Double indirect
+		indirect *firstind = indirect_create();
+		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
+		
+		for (i = 0; count < directory->size && i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			indirect *secind = indirect_create();
+			bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+
+			int k;
+			for (k = 0; count < directory->size && k < 128; k++) {
+				dirent *de = dirent_create();
+				bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
+
+				int j;
+				for (j = 0; count < directory->size && j < 16; j++) {
+					// j = direntry entry
+					if (de->entries[j].block.valid) {
+						count++;
+						if (!strcmp(de->entries[j].name, searchPath)) {
+							// Found it!
+							dir = de->entries[j];
+							dirent_free(de);
+							indirect_free(firstind);
+							indirect_free(secind);
+
+							if (deleteFlag)
+								dir.block.valid = 0;
+
+							if (dir.type == 0) {
+								// If the dirent is for a directory
+								bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
+								retBlock->block = dir.block.block;
+								retBlock->valid = 1;
+								return 0;
+							}
+							else {
+								// If the dirent is for a file
+								bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
+								retBlock->block = dir.block.block;
+								retBlock->valid = 1;
+								return 1;
+							}
+						}
+					}
+				}
+
+				dirent_free(de);
+			}
+
+			indirect_free(secind);
+			
+		}
+
+		indirect_free(firstind);
 	} 
 
 	return -1;
