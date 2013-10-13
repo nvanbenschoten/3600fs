@@ -1017,7 +1017,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 						if (empty < 2) {
 							// Only direntry is the one that is being deleted
-							releaseFree(v, directory->direct[i].block);
+							releaseFree(v, directory->direct[i]);
 							directory->direct[i].valid = 0;
 						}
 
@@ -1096,7 +1096,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 							if (empty < 2) {
 								// Only direntry is the one that is being deleted
-								releaseFree(v, directory->direct[i].block);
+								releaseFree(v, directory->direct[i]);
 								directory->direct[i].valid = 0;
 							}
 
@@ -1183,7 +1183,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 								if (empty < 2) {
 									// Only direntry is the one that is being deleted
-									releaseFree(v, directory->direct[i].block);
+									releaseFree(v, directory->direct[i]);
 									directory->direct[i].valid = 0;
 								}
 
