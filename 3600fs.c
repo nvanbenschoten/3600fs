@@ -132,10 +132,20 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
+	int ret;
 
-	blocknum block;
-	int ret = getNODE(d, name, matchd, matchi, &block, 0);
-	dnode_free(d);
+	if (!strcmp(name, "")) {
+		// If name is blank, it means that it is refering to the current directory
+		ret = 0;
+		dnode *tmp = matchd;
+		matchd = d;
+		dnode_free(tmp);
+	}
+	else {
+		blocknum block;
+		ret = getNODE(d, name, matchd, matchi, &block, 0);
+		dnode_free(d);
+	}
 
 	// Check to see if match is valid
 	if (ret < 0) {
