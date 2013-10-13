@@ -236,30 +236,98 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	// Check in direct
 	int i;
-	unsigned int count = 0;
-	for (i = 0; count < d->size && i < 110; i++) {
-		// i = direct blocks
-		// Count number of valid while comparing until all are acocunted for
+	unsigned int count = offset;
+	while (count < 110*16) {
+		
 		dirent *de = dirent_create();
-
-		bufdread(d->direct[i].block, (char *)de, sizeof(dirent));
+		bufdread(d->direct[count/16].block, (char *)de, sizeof(dirent));
 
 		int j;
-		for (j = 0; count < d->size && j < 16; j++) {
+		for (j = count%16; j < 16; j++) {
 			// j = direntry entry
+            count++;
+            printf("Direct nodes %i : %i\n", count, j);
 			if (de->entries[j].block.valid) {
 				// If the entry is valid
-				count++;
-				if(filler(buf, de->entries[j].name, NULL, 0)) {
+				if(filler(buf, de->entries[j].name, NULL, count)) {
 					dirent_free(de);
 					dnode_free(d);
-					return 0;
+					return 1;
 				}
 			}
 		}
 
 		dirent_free(de);
 	}
+
+    indirect *ind = indirect_create();
+    bufdread(d->single_indirect.block, (char *)ind, sizeof(indirect));
+    while(count < 128*16+110*16) {
+        
+        dirent *de = dirent_create();
+        bufdread(ind->blocks[(count-110*16)/16].block, (char *)de, sizeof(dirent));
+
+        int j;
+        for (j = count%16; j < 16; j++) {
+            // j = direntry entry
+            count++;
+            printf("Indirect nodes %i : %i\n", count, j);
+            if (de->entries[j].block.valid) {
+                // If the entry is valid
+                if(filler(buf, de->entries[j].name, NULL, count)) {
+                    indirect_free(ind);
+                    dirent_free(de);
+                    dnode_free(d);
+                    return 1;
+                }
+            }
+        }
+
+        dirent_free(de);
+    }
+
+    indirect_free(ind);
+
+
+
+            
+
+    indirect *firstind = indirect_create();
+    bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
+    while(count < 128*128*16+128*16+110*16) {
+        
+        indirect *secind = indirect_create();
+        bufdread(firstind->blocks[(count-110*16-128*16)/128].block, (char *)secind, sizeof(indirect));
+
+        int k;
+        for (k = (count-110*16-128*16)%128; k < 128; k++) {
+
+            dirent *de = dirent_create();
+            bufdread(secind->blocks[(count-110*16-128*16)/128/16].block, (char *)de, sizeof(dirent));
+
+            int j;
+            for (j = ((count-110*16-128*16-k*128)%16; j < 16; j++) {
+                // j = direntry entry
+                count++;
+                printf("Double Indirect nodes %i : %i : %i\n", count, k, i);
+                if (de->entries[j].block.valid) {
+                    // If the entry is valid
+                    if(filler(buf, de->entries[j].name, NULL, count)) {
+                        indirect_free(firstind);
+                        indirect_free(secind);
+                        dirent_free(de);
+                        dnode_free(d);
+                        return 1;
+                    }
+                }
+            }
+
+            dirent_free(de);
+        }
+
+        indirect_free(secind);
+    }
+    indirect_free(firstind);
 
 	dnode_free(d);
 
@@ -789,7 +857,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 	if (directory->size > 16*110+16*128) {
 		// Double indirect
 		indirect *firstind = indirect_create();
-		bufdread(directory->single_indirect.block, (char *)firstind, sizeof(indirect));
+		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
 		
 		for (i = 0; count < directory->size && i < 128; i++) {
 			// i = direct blocks
