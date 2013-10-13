@@ -265,91 +265,100 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		}
 	}
 
+	if (d->single_indirect.valid) {
+		indirect *ind = indirect_create();
+		bufdread(d->single_indirect.block, (char *)ind, sizeof(indirect));
+		while(count < 128*16+110*16) {
 
-	indirect *ind = indirect_create();
-	bufdread(d->single_indirect.block, (char *)ind, sizeof(indirect));
-	while(count < 128*16+110*16) {
+			if (ind->blocks[(count-110*16)/16].valid) {
 
-		if (ind->blocks[(count-110*16)/16].valid) {
+				dirent *de = dirent_create();
+				bufdread(ind->blocks[(count-110*16)/16].block, (char *)de, sizeof(dirent));
 
-			dirent *de = dirent_create();
-			bufdread(ind->blocks[(count-110*16)/16].block, (char *)de, sizeof(dirent));
-
-			int j;
-			for (j = count%16; j < 16; j++) {
-				// j = direntry entry
-				count++;
-				printf("Indirect nodes %i : %i\n", count, j);
-				if (de->entries[j].block.valid) {
-					// If the entry is valid
-					if(filler(buf, de->entries[j].name, NULL, count)) {
-						indirect_free(ind);
-						dirent_free(de);
-						dnode_free(d);
-						return 1;
-					}
-				}
-			}
-
-			dirent_free(de);
-		}
-		else {
-			count += 16;
-		}
-	}
-
-	indirect_free(ind);
-
-
-
-	indirect *firstind = indirect_create();
-	bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
-	while(count < 128*128*16+128*16+110*16) {
-		
-		if (firstind->blocks[(count-110*16-128*16)/128].valid) {
-
-			indirect *secind = indirect_create();
-			bufdread(firstind->blocks[(count-110*16-128*16)/128].block, (char *)secind, sizeof(indirect));
-
-			int k;
-			for (k = (count-110*16-128*16)%128; k < 128; k++) {
-
-				if (secind->blocks[(count-110*16-128*16)/128/16].valid) {
-
-					dirent *de = dirent_create();
-					bufdread(secind->blocks[(count-110*16-128*16)/128/16].block, (char *)de, sizeof(dirent));
-
-					int j;
-					for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
-						// j = direntry entry
-						count++;
-						printf("Double Indirect nodes %i : %i : %i\n", count, k, j);
-						if (de->entries[j].block.valid) {
-							// If the entry is valid
-							if(filler(buf, de->entries[j].name, NULL, count)) {
-								indirect_free(firstind);
-								indirect_free(secind);
-								dirent_free(de);
-								dnode_free(d);
-								return 1;
-							}
+				int j;
+				for (j = count%16; j < 16; j++) {
+					// j = direntry entry
+					count++;
+					printf("Indirect nodes %i : %i\n", count, j);
+					if (de->entries[j].block.valid) {
+						// If the entry is valid
+						if(filler(buf, de->entries[j].name, NULL, count)) {
+							indirect_free(ind);
+							dirent_free(de);
+							dnode_free(d);
+							return 1;
 						}
 					}
+				}
 
-					dirent_free(de);
-				}
-				else {
-					count += 16;
-				}
+				dirent_free(de);
 			}
+			else {
+				count += 16;
+			}
+		}
 
-			indirect_free(secind);
-		}
-		else {
-			count += 128*16;
-		}
+		indirect_free(ind);
 	}
-	indirect_free(firstind);
+	else {
+		count += 128*16;
+	}
+
+
+	if (d->double_indirect.valid) {
+
+		indirect *firstind = indirect_create();
+		bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
+		while(count < 128*128*16+128*16+110*16) {
+			
+			if (firstind->blocks[(count-110*16-128*16)/128].valid) {
+
+				indirect *secind = indirect_create();
+				bufdread(firstind->blocks[(count-110*16-128*16)/128].block, (char *)secind, sizeof(indirect));
+
+				int k;
+				for (k = (count-110*16-128*16)%128; k < 128; k++) {
+
+					if (secind->blocks[(count-110*16-128*16)/128/16].valid) {
+
+						dirent *de = dirent_create();
+						bufdread(secind->blocks[(count-110*16-128*16)/128/16].block, (char *)de, sizeof(dirent));
+
+						int j;
+						for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
+							// j = direntry entry
+							count++;
+							printf("Double Indirect nodes %i : %i : %i\n", count, k, j);
+							if (de->entries[j].block.valid) {
+								// If the entry is valid
+								if(filler(buf, de->entries[j].name, NULL, count)) {
+									indirect_free(firstind);
+									indirect_free(secind);
+									dirent_free(de);
+									dnode_free(d);
+									return 1;
+								}
+							}
+						}
+
+						dirent_free(de);
+					}
+					else {
+						count += 16;
+					}
+				}
+
+				indirect_free(secind);
+			}
+			else {
+				count += 128*16;
+			}
+		}
+		indirect_free(firstind);
+	}
+	else {
+		count += 128*128*16
+	}
 
 	dnode_free(d);
 
