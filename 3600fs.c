@@ -139,7 +139,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	inode *matchi = inode_create(0, 0, 0, 0);
 	
 	blocknum block;
-	int ret = getNODE(d, name, matchd, matchi, &block, 0);
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0);
 	dnode_free(d);
 
 	// Check to see if match is valid
@@ -411,7 +411,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	dnode * temp_d = dnode_create(0, 0, 0, 0);
 	inode * temp_i = inode_create(0, 0, 0, 0);
 	blocknum block;
-	int ret = getNODE(d, name, temp_d, temp_i, &block, 0);
+	int ret = getNODE(d, name, temp_d, temp_i, &block, 0, 0);
 	if (ret >= 0) {
 		// COMMENT Made it so it file or dir match, it returns
 		dnode_free(d);
@@ -592,7 +592,7 @@ static int vfs_delete(const char *path)
 	inode *i_node = inode_create(0, 0, 0, 0);
 	dnode *d_temp = dnode_create(0, 0, 0, 0);
 	blocknum block;
-	int ret = getNODE(d, name, d_temp, i_node, &block, 1);
+	int ret = getNODE(d, name, d_temp, i_node, &block, 1, dirBlock.block);
 	if (ret != 1) { // if didnt find matching file node
 		// what does findNODE return if both match??
 		inode_free(i_node);
@@ -618,7 +618,6 @@ static int vfs_delete(const char *path)
 	}
 
 	// -> then need to also do same for single and double indirects...
-
 
 	// Frees inode block itself
 	releaseFree(v, block);
@@ -968,7 +967,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 // -1 for not found
 // 0 for directory
 // 1 for file
-int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag) {
+int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag, int directoryBlock) {
 	*retBlock = blocknum_create(0, 0);
 
 	direntry dir;
@@ -992,23 +991,54 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 				if (!strcmp(name, de->entries[j].name)) {
 					// Found it!
 					dir = de->entries[j];
-					dirent_free(de);
-
-					if (deleteFlag)
-						dir.block.valid = 0;
 
 					if (dir.type == 0) {
 						// If the dirent is for a directory
 						bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
 						retBlock->block = dir.block.block;
 						retBlock->valid = 1;
-						return 0;
 					}
 					else {
 						// If the dirent is for a file
 						bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
 						retBlock->block = dir.block.block;
 						retBlock->valid = 1;
+					}
+
+					if (deleteFlag) {
+						// Set to 2 to see if anything else is valid in the dirent
+						int empty = 0;
+						int l;
+						for (l = 0; l < 16; l ++) {
+							if (de->entries[l].block.valid) {
+								empty++;
+							}
+						}
+
+						if (empty < 2) {
+							// Only direntry is the one that is being deleted
+							releaseFree(v, directory->direct[i].block);
+							directory->direct[i].valid = 0;
+						}
+
+						else {
+							// More than one valid direntry in dirent
+							de->entries[j].block.valid = 0;
+							bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
+						}
+
+						directory->size--;
+						bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
+					}
+
+					dirent_free(de);
+
+					if (dir.type == 0) {
+						// If the dirent is for a directory
+						return 0;
+					}
+					else {
+						// If the dirent is for a file
 						return 1;
 					}
 				}
@@ -1039,24 +1069,55 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 					if (!strcmp(de->entries[j].name, name)) {
 						// Found it!
 						dir = de->entries[j];
-						dirent_free(de);
 						indirect_free(ind);
-
-						if (deleteFlag)
-							dir.block.valid = 0;
 
 						if (dir.type == 0) {
 							// If the dirent is for a directory
 							bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
 							retBlock->block = dir.block.block;
 							retBlock->valid = 1;
-							return 0;
 						}
 						else {
 							// If the dirent is for a file
 							bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
 							retBlock->block = dir.block.block;
 							retBlock->valid = 1;
+						}
+
+						if (deleteFlag) {
+							// Set to 2 to see if anything else is valid in the dirent
+							int empty = 0;
+							int l;
+							for (l = 0; l < 16; l ++) {
+								if (de->entries[l].block.valid) {
+									empty++;
+								}
+							}
+
+							if (empty < 2) {
+								// Only direntry is the one that is being deleted
+								releaseFree(v, directory->direct[i].block);
+								directory->direct[i].valid = 0;
+							}
+
+							else {
+								// More than one valid direntry in dirent
+								de->entries[j].block.valid = 0;
+								bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
+							}
+
+							directory->size--;
+							bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
+						}
+
+						dirent_free(de);
+
+						if (dir.type == 0) {
+							// If the dirent is for a directory
+							return 0;
+						}
+						else {
+							// If the dirent is for a file
 							return 1;
 						}
 					}
@@ -1094,25 +1155,56 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 						if (!strcmp(de->entries[j].name, name)) {
 							// Found it!
 							dir = de->entries[j];
-							dirent_free(de);
 							indirect_free(firstind);
 							indirect_free(secind);
-
-							if (deleteFlag)
-								dir.block.valid = 0;
 
 							if (dir.type == 0) {
 								// If the dirent is for a directory
 								bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
 								retBlock->block = dir.block.block;
 								retBlock->valid = 1;
-								return 0;
 							}
 							else {
 								// If the dirent is for a file
 								bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
 								retBlock->block = dir.block.block;
 								retBlock->valid = 1;
+							}
+
+							if (deleteFlag) {
+								// Set to 2 to see if anything else is valid in the dirent
+								int empty = 0;
+								int l;
+								for (l = 0; l < 16; l ++) {
+									if (de->entries[l].block.valid) {
+										empty++;
+									}
+								}
+
+								if (empty < 2) {
+									// Only direntry is the one that is being deleted
+									releaseFree(v, directory->direct[i].block);
+									directory->direct[i].valid = 0;
+								}
+
+								else {
+									// More than one valid direntry in dirent
+									de->entries[j].block.valid = 0;
+									bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
+								}
+
+								directory->size--;
+								bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
+							}
+
+							dirent_free(de);
+
+							if (dir.type == 0) {
+								// If the dirent is for a directory
+								return 0;
+							}
+							else {
+								// If the dirent is for a file
 								return 1;
 							}
 						}
