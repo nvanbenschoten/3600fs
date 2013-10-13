@@ -1031,7 +1031,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
-					if (!strcmp(de->entries[j].name, searchPath)) {
+					if (!strcmp(de->entries[j].name, name)) {
 						// Found it!
 						dir = de->entries[j];
 						dirent_free(de);
