@@ -357,7 +357,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		indirect_free(firstind);
 	}
 	else {
-		count += 128*128*16
+		count += 128*128*16;
 	}
 
 	dnode_free(d);
