@@ -235,7 +235,6 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	}
 
 	// Check in direct
-	int i;
 	unsigned int count = offset;
 	while (count < 110*16) {
 		
@@ -290,8 +289,6 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 
 
-            
-
     indirect *firstind = indirect_create();
     bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
     while(count < 128*128*16+128*16+110*16) {
@@ -306,7 +303,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
             bufdread(secind->blocks[(count-110*16-128*16)/128/16].block, (char *)de, sizeof(dirent));
 
             int j;
-            for (j = ((count-110*16-128*16-k*128)%16; j < 16; j++) {
+            for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
                 // j = direntry entry
                 count++;
                 printf("Double Indirect nodes %i : %i : %i\n", count, k, i);
