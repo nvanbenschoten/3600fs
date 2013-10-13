@@ -118,7 +118,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	// Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
-    blocknum dirBlock = blocknum_create(v->root.block, 1);
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
 
 	if (strcmp(pathcpy, "/")) {
 		// If path isnt the root directory
@@ -133,7 +133,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
 
-    blocknum block;
+	blocknum block;
 	int ret = getNODE(d, name, matchd, matchi, &block, 0);
 	dnode_free(d);
 
@@ -222,7 +222,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	// Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
-    blocknum block = blocknum_create(v->root.block, 1);
+	blocknum block = blocknum_create(v->root.block, 1);
 
 	if (strcmp(pathcpy, "/")) {
 		// If path isnt the root directory
@@ -237,94 +237,119 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	// Check in direct
 	unsigned int count = offset;
 	while (count < 110*16) {
-		
-		dirent *de = dirent_create();
-		bufdread(d->direct[count/16].block, (char *)de, sizeof(dirent));
 
-		int j;
-		for (j = count%16; j < 16; j++) {
-			// j = direntry entry
-            count++;
-            printf("Direct nodes %i : %i\n", count, j);
-			if (de->entries[j].block.valid) {
-				// If the entry is valid
-				if(filler(buf, de->entries[j].name, NULL, count)) {
-					dirent_free(de);
-					dnode_free(d);
-					return 1;
+		if (d->direct[count/16].valid) {
+
+			dirent *de = dirent_create();
+			bufdread(d->direct[count/16].block, (char *)de, sizeof(dirent));
+
+			int j;
+			for (j = count%16; j < 16; j++) {
+				// j = direntry entry
+				count++;
+				printf("Direct nodes %i : %i\n", count, j);
+				if (de->entries[j].block.valid) {
+					// If the entry is valid
+					if(filler(buf, de->entries[j].name, NULL, count)) {
+						dirent_free(de);
+						dnode_free(d);
+						return 1;
+					}
 				}
 			}
-		}
 
-		dirent_free(de);
+			dirent_free(de);
+		}
+		else {
+			count += 16;
+		}
 	}
 
-    indirect *ind = indirect_create();
-    bufdread(d->single_indirect.block, (char *)ind, sizeof(indirect));
-    while(count < 128*16+110*16) {
-        
-        dirent *de = dirent_create();
-        bufdread(ind->blocks[(count-110*16)/16].block, (char *)de, sizeof(dirent));
 
-        int j;
-        for (j = count%16; j < 16; j++) {
-            // j = direntry entry
-            count++;
-            printf("Indirect nodes %i : %i\n", count, j);
-            if (de->entries[j].block.valid) {
-                // If the entry is valid
-                if(filler(buf, de->entries[j].name, NULL, count)) {
-                    indirect_free(ind);
-                    dirent_free(de);
-                    dnode_free(d);
-                    return 1;
-                }
-            }
-        }
+	indirect *ind = indirect_create();
+	bufdread(d->single_indirect.block, (char *)ind, sizeof(indirect));
+	while(count < 128*16+110*16) {
 
-        dirent_free(de);
-    }
+		if (ind->blocks[(count-110*16)/16].valid) {
 
-    indirect_free(ind);
+			dirent *de = dirent_create();
+			bufdread(ind->blocks[(count-110*16)/16].block, (char *)de, sizeof(dirent));
+
+			int j;
+			for (j = count%16; j < 16; j++) {
+				// j = direntry entry
+				count++;
+				printf("Indirect nodes %i : %i\n", count, j);
+				if (de->entries[j].block.valid) {
+					// If the entry is valid
+					if(filler(buf, de->entries[j].name, NULL, count)) {
+						indirect_free(ind);
+						dirent_free(de);
+						dnode_free(d);
+						return 1;
+					}
+				}
+			}
+
+			dirent_free(de);
+		}
+		else {
+			count += 16;
+		}
+	}
+
+	indirect_free(ind);
 
 
 
-    indirect *firstind = indirect_create();
-    bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
-    while(count < 128*128*16+128*16+110*16) {
-        
-        indirect *secind = indirect_create();
-        bufdread(firstind->blocks[(count-110*16-128*16)/128].block, (char *)secind, sizeof(indirect));
+	indirect *firstind = indirect_create();
+	bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
+	while(count < 128*128*16+128*16+110*16) {
+		
+		if (firstind->blocks[(count-110*16-128*16)/128].valid) {
 
-        int k;
-        for (k = (count-110*16-128*16)%128; k < 128; k++) {
+			indirect *secind = indirect_create();
+			bufdread(firstind->blocks[(count-110*16-128*16)/128].block, (char *)secind, sizeof(indirect));
 
-            dirent *de = dirent_create();
-            bufdread(secind->blocks[(count-110*16-128*16)/128/16].block, (char *)de, sizeof(dirent));
+			int k;
+			for (k = (count-110*16-128*16)%128; k < 128; k++) {
 
-            int j;
-            for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
-                // j = direntry entry
-                count++;
-                printf("Double Indirect nodes %i : %i : %i\n", count, k, j);
-                if (de->entries[j].block.valid) {
-                    // If the entry is valid
-                    if(filler(buf, de->entries[j].name, NULL, count)) {
-                        indirect_free(firstind);
-                        indirect_free(secind);
-                        dirent_free(de);
-                        dnode_free(d);
-                        return 1;
-                    }
-                }
-            }
+				if (secind->blocks[(count-110*16-128*16)/128/16].valid) {
 
-            dirent_free(de);
-        }
+					dirent *de = dirent_create();
+					bufdread(secind->blocks[(count-110*16-128*16)/128/16].block, (char *)de, sizeof(dirent));
 
-        indirect_free(secind);
-    }
-    indirect_free(firstind);
+					int j;
+					for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
+						// j = direntry entry
+						count++;
+						printf("Double Indirect nodes %i : %i : %i\n", count, k, j);
+						if (de->entries[j].block.valid) {
+							// If the entry is valid
+							if(filler(buf, de->entries[j].name, NULL, count)) {
+								indirect_free(firstind);
+								indirect_free(secind);
+								dirent_free(de);
+								dnode_free(d);
+								return 1;
+							}
+						}
+					}
+
+					dirent_free(de);
+				}
+				else {
+					count += 16;
+				}
+			}
+
+			indirect_free(secind);
+		}
+		else {
+			count += 128*16;
+		}
+	}
+	indirect_free(firstind);
 
 	dnode_free(d);
 
@@ -338,135 +363,135 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 
-    // Move down path
-    char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
-    assert(pathcpy != NULL);
-    strcpy(pathcpy, path);
+	// Move down path
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
 
-    char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
-    assert(name != NULL);
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
 
-    // Seperating the directory name from the file/directory name
-    if (seperatePathAndName(pathcpy, name)) {
-            printf("Error seperating the path and filename\n");
-            return -1;
-    }
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+			printf("Error seperating the path and filename\n");
+			return -1;
+	}
 
-    // Read vcb
-    dnode *d = dnode_create(0, 0, 0, 0);
-    bufdread(v->root.block, (char *)d, sizeof(dnode));
-    blocknum dirBlock = blocknum_create(v->root.block, 1);
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
 
-    if (strcmp(path, "")) {
-            // If path isnt the root directory
-            // Transforms d to the correct directory
-            if(findDNODE(d, pathcpy, &dirBlock)) {
-                    // If ditectory could not be found
-                    printf("Could not find directory\n");
-                    return -1;
-            }
-    }
+	if (strcmp(path, "")) {
+			// If path isnt the root directory
+			// Transforms d to the correct directory
+			if(findDNODE(d, pathcpy, &dirBlock)) {
+					// If ditectory could not be found
+					printf("Could not find directory\n");
+					return -1;
+			}
+	}
 
-    // check if file already exists
-    dnode * temp_d = dnode_create(0, 0, 0, 0);
-    inode * temp_i = inode_create(0, 0, 0, 0);
-    blocknum block;
-    int ret = getNODE(d, name, temp_d, temp_i, &block, 0);
-    if (ret >= 0) {
-        // COMMENT Made it so it file or dir match, it returns
-        dnode_free(d);
-        dnode_free(temp_d);
-        inode_free(temp_i);
-        // do pathcpy and name need to be freed?
-        free(pathcpy);
-        free(name);
-        return -EEXIST;
-    }
-    else {
-        dnode_free(temp_d);
-        inode_free(temp_i);
-    }
+	// check if file already exists
+	dnode * temp_d = dnode_create(0, 0, 0, 0);
+	inode * temp_i = inode_create(0, 0, 0, 0);
+	blocknum block;
+	int ret = getNODE(d, name, temp_d, temp_i, &block, 0);
+	if (ret >= 0) {
+		// COMMENT Made it so it file or dir match, it returns
+		dnode_free(d);
+		dnode_free(temp_d);
+		inode_free(temp_i);
+		// do pathcpy and name need to be freed?
+		free(pathcpy);
+		free(name);
+		return -EEXIST;
+	}
+	else {
+		dnode_free(temp_d);
+		inode_free(temp_i);
+	}
 
-    // What if the dirent is only half full of valid direntries?
-    // Should we fix that to have more efficient memory storage?
-    // Also, what if there are no dirents with empty slots and we need to allocate a new one?
-    int d_last_eb = 0;
-    while (d->direct[d_last_eb].valid) { // find last directory entry block
-        d_last_eb++;
-    }
-    d_last_eb--;
+	// What if the dirent is only half full of valid direntries?
+	// Should we fix that to have more efficient memory storage?
+	// Also, what if there are no dirents with empty slots and we need to allocate a new one?
+	int d_last_eb = 0;
+	while (d->direct[d_last_eb].valid) { // find last directory entry block
+		d_last_eb++;
+	}
+	d_last_eb--;
 
-    // read directory entry block
-    dirent *de = dirent_create();
-    bufdread(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
+	// read directory entry block
+	dirent *de = dirent_create();
+	bufdread(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
 
-    int d_last_ent = 0;
-    while (((unsigned int)d_last_ent < (unsigned int)sizeof(dirent)/sizeof(direntry)) &&
-        de->entries[d_last_ent].block.valid) {
-        d_last_ent++;
-    }
-    if (d_last_ent == sizeof(dirent)/sizeof(direntry)) { // if need to allocate a new dirent block
-        // modify d_last_eb and d_last_ent to point to new block & entry
-        while (d->direct[d_last_eb].valid) {
-            // COMMENT This is going to have to be recursive for it to truly work
-            d_last_eb++;
-        }
-        d->direct[d_last_eb] = v->free; // set next dirent blocknum to be next free block
-        dirent *de_new = dirent_create(); // create new dirent
-        free(de); // free the old dirent as we are replacing it
-        de = de_new; // reassign old dirent to new dirent
-        d_last_ent = 0; // set last entry to be first entry because new dirent
-        d->size += 1; // add new block to size
-        
-        if (getNextFree(v) < 0) {
-            printf("No free blocks available\n");
-            return -1;
-        }
-        
-        // if all those are valid go to next indirect etc
-        // could probably use find next invalid function, will run into problems with reusing
-        // dirent blocks as well...
-    }
-    
-    // write info to dirent block
-    strcpy(de->entries[d_last_ent].name, name);
-    de->entries[d_last_ent].type = 1;
-    de->entries[d_last_ent].block = blocknum_create(v->free.block, 1);
-    bufdwrite(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
+	int d_last_ent = 0;
+	while (((unsigned int)d_last_ent < (unsigned int)sizeof(dirent)/sizeof(direntry)) &&
+		de->entries[d_last_ent].block.valid) {
+		d_last_ent++;
+	}
+	if (d_last_ent == sizeof(dirent)/sizeof(direntry)) { // if need to allocate a new dirent block
+		// modify d_last_eb and d_last_ent to point to new block & entry
+		while (d->direct[d_last_eb].valid) {
+			// COMMENT This is going to have to be recursive for it to truly work
+			d_last_eb++;
+		}
+		d->direct[d_last_eb] = v->free; // set next dirent blocknum to be next free block
+		dirent *de_new = dirent_create(); // create new dirent
+		free(de); // free the old dirent as we are replacing it
+		de = de_new; // reassign old dirent to new dirent
+		d_last_ent = 0; // set last entry to be first entry because new dirent
+		d->size += 1; // add new block to size
+		
+		if (getNextFree(v) < 0) {
+			printf("No free blocks available\n");
+			return -1;
+		}
+		
+		// if all those are valid go to next indirect etc
+		// could probably use find next invalid function, will run into problems with reusing
+		// dirent blocks as well...
+	}
+	
+	// write info to dirent block
+	strcpy(de->entries[d_last_ent].name, name);
+	de->entries[d_last_ent].type = 1;
+	de->entries[d_last_ent].block = blocknum_create(v->free.block, 1);
+	bufdwrite(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
 
-    // Update dnode
-    d->size += 1;
-    bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
+	// Update dnode
+	d->size += 1;
+	bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
 
-    int writenum;// = getNextFree(v);
-    if ((writenum = getNextFree(v)) < 0) {
-    	// Could not get next free block
-    	printf("No free blocks available\n");
+	int writenum;// = getNextFree(v);
+	if ((writenum = getNextFree(v)) < 0) {
+		// Could not get next free block
+		printf("No free blocks available\n");
 	return -1;
-    }
-    
-    inode * i = inode_create(0, geteuid(), getegid(), mode);
-    clock_gettime(CLOCK_REALTIME, &(d->create_time));
-    clock_gettime(CLOCK_REALTIME, &(d->access_time));
-    clock_gettime(CLOCK_REALTIME, &(d->modify_time));
-    i->direct[0] = v->free;
-    i->single_indirect = blocknum_create(0, 0);
-    i->double_indirect = blocknum_create(0, 0);
-    bufdwrite(writenum, (char *) i, sizeof(inode));
+	}
+	
+	inode * i = inode_create(0, geteuid(), getegid(), mode);
+	clock_gettime(CLOCK_REALTIME, &(d->create_time));
+	clock_gettime(CLOCK_REALTIME, &(d->access_time));
+	clock_gettime(CLOCK_REALTIME, &(d->modify_time));
+	i->direct[0] = v->free;
+	i->single_indirect = blocknum_create(0, 0);
+	i->double_indirect = blocknum_create(0, 0);
+	bufdwrite(writenum, (char *) i, sizeof(inode));
 
-    getNextFree(v);
+	getNextFree(v);
 
-    // update vcb
-    bufdwrite(0, (char *) v, sizeof(vcb));
+	// update vcb
+	bufdwrite(0, (char *) v, sizeof(vcb));
 
-    // write new file info to directory
+	// write new file info to directory
 
-    // free all the stuff
-    dnode_free(d);
-    dirent_free(de);
-    inode_free(i);
+	// free all the stuff
+	dnode_free(d);
+	dirent_free(de);
+	inode_free(i);
 
-    return 0;
+	return 0;
 }
 
 /*
@@ -516,83 +541,83 @@ static int vfs_write(const char *path, const char *buf, size_t size,
  */
 static int vfs_delete(const char *path)
 {
-    /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
-            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
+	/* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
+			AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
 
-    // Move down path
-    char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
-    assert(pathcpy != NULL);
-    strcpy(pathcpy, path);
+	// Move down path
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
 
-    char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
-    assert(name != NULL);
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
 
-    // Seperating the directory name from the file/directory name
-    if (seperatePathAndName(pathcpy, name)) {
-            printf("Error seperating the path and filename\n");
-            return -1;
-    }
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+			printf("Error seperating the path and filename\n");
+			return -1;
+	}
 
-    // Read vcb
-    dnode *d = dnode_create(0, 0, 0, 0);
-    bufdread(v->root.block, (char *)d, sizeof(dnode));
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
 
-    blocknum dirBlock = blocknum_create(v->root.block, 1);
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
 
-    if (strcmp(path, "")) {
-            // If path isnt the root directory
-            // Transforms d to the correct directory
-            if(findDNODE(d, pathcpy, &dirBlock)) {
-                    // If directory could not be found
-                    printf("Could not find directory\n");
-                    return -1;
-            }
-    }
+	if (strcmp(path, "")) {
+			// If path isnt the root directory
+			// Transforms d to the correct directory
+			if(findDNODE(d, pathcpy, &dirBlock)) {
+					// If directory could not be found
+					printf("Could not find directory\n");
+					return -1;
+			}
+	}
 
-    inode *i_node = inode_create(0, 0, 0, 0);
-    dnode *d_temp = dnode_create(0, 0, 0, 0);
-    blocknum block;
-    int ret = getNODE(d, name, d_temp, i_node, &block, 1);
-    if (ret != 1) { // if didnt find matching file node
-        // what does findNODE return if both match??
-        inode_free(i_node);
-        dnode_free(d_temp);
-        dnode_free(d);
-        free(name);
-        free(pathcpy);
-        printf("Could not find file to delete or file is a directory");
-        return -1;
-    }
+	inode *i_node = inode_create(0, 0, 0, 0);
+	dnode *d_temp = dnode_create(0, 0, 0, 0);
+	blocknum block;
+	int ret = getNODE(d, name, d_temp, i_node, &block, 1);
+	if (ret != 1) { // if didnt find matching file node
+		// what does findNODE return if both match??
+		inode_free(i_node);
+		dnode_free(d_temp);
+		dnode_free(d);
+		free(name);
+		free(pathcpy);
+		printf("Could not find file to delete or file is a directory");
+		return -1;
+	}
 
-    // Frees data blocks
-    int i;
-    unsigned int count = 0;
-    for (i = 0; count < i_node->size && i < 110; i++) {
-        // i = direct blocks
-        // Count number of valid while comparing until all are acocunted for
-        if (i_node->direct[i].valid) {
-            count++;   
-            // Free data here
-            releaseFree(v, i_node->direct[i]);
-        }
-    }
+	// Frees data blocks
+	int i;
+	unsigned int count = 0;
+	for (i = 0; count < i_node->size && i < 110; i++) {
+		// i = direct blocks
+		// Count number of valid while comparing until all are acocunted for
+		if (i_node->direct[i].valid) {
+			count++;   
+			// Free data here
+			releaseFree(v, i_node->direct[i]);
+		}
+	}
 
-    // -> then need to also do same for single and double indirects...
+	// -> then need to also do same for single and double indirects...
 
 
-    // Frees inode block itself
-    releaseFree(v, block);
+	// Frees inode block itself
+	releaseFree(v, block);
 
-    // update vcb
-    bufdwrite(0, (char *) v, sizeof(vcb));
+	// update vcb
+	bufdwrite(0, (char *) v, sizeof(vcb));
 
-    inode_free(i_node);
-    dnode_free(d_temp);
-    dnode_free(d);
-    free(name);
-    free(pathcpy);
+	inode_free(i_node);
+	dnode_free(d_temp);
+	dnode_free(d);
+	free(name);
+	free(pathcpy);
 
-    return 0;
+	return 0;
 }
 
 /*
@@ -780,8 +805,8 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 				count++;
 				if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
 					// If match found, overwrite current dnode
-                    block->block = de->entries[j].block.block;
-                    block->block = de->entries[j].block.valid;
+					block->block = de->entries[j].block.block;
+					block->block = de->entries[j].block.valid;
 
 					bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 					free(searchPath);
@@ -797,7 +822,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 						free(restOfPath);
 						return 0;
 					}
-                }
+				}
 			}
 		}
 
@@ -823,8 +848,8 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 					count++;
 					if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
 						// If match found, overwrite current dnode
-                        block->block = de->entries[j].block.block;
-                        block->block = de->entries[j].block.valid;
+						block->block = de->entries[j].block.block;
+						block->block = de->entries[j].block.valid;
 
 						bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 						free(searchPath);
@@ -841,7 +866,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 							free(restOfPath);
 							return 0;
 						}
-                    }
+					}
 				}
 			}
 
@@ -876,10 +901,10 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 						if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
 							// If match found, overwrite current dnode
 
-                            block->block = de->entries[j].block.block;
-                            block->block = de->entries[j].block.valid;
+							block->block = de->entries[j].block.block;
+							block->block = de->entries[j].block.valid;
 							
-                            bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
+							bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 							// Free variables
 							free(searchPath);
 							dirent_free(de);
@@ -897,7 +922,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 								free(restOfPath);
 								return 0;
 							}
-                        }
+						}
 					}
 				}
 
@@ -929,9 +954,9 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 // 0 for directory
 // 1 for file
 int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag) {
-    *retBlock = blocknum_create(0, 0);
+	*retBlock = blocknum_create(0, 0);
 
-    direntry dir;
+	direntry dir;
 	dir.block.valid = 0;
 
 	// Check in directory
@@ -952,23 +977,23 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 				if (!strcmp(name, de->entries[j].name))
 					// Found it!
 					dir = de->entries[j];
-                    dirent_free(de);
+					dirent_free(de);
 
-                    if (deleteFlag)
-                        dir.block.valid = 0;
+					if (deleteFlag)
+						dir.block.valid = 0;
 
 					if (dir.type == 0) {
 						// If the dirent is for a directory
 						bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
-                        retBlock->block = dir.block.block;
-                        retBlock->valid = 1;
+						retBlock->block = dir.block.block;
+						retBlock->valid = 1;
 						return 0;
 					}
 					else {
 						// If the dirent is for a file
 						bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
-                        retBlock->block = dir.block.block;
-                        retBlock->valid = 1;
+						retBlock->block = dir.block.block;
+						retBlock->valid = 1;
 						return 1;
 					}
 			}
@@ -995,18 +1020,18 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 // 	0-n if freeblock
 int getNextFree(vcb *v) {
 	int writenum = v->free.block;
-    freeblock * f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
-    bufdread(v->free.block, (char *) f, sizeof(freeblock));
-    v->free = f->next;
-    free(f);
+	freeblock * f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
+	bufdread(v->free.block, (char *) f, sizeof(freeblock));
+	v->free = f->next;
+	free(f);
 	return writenum;
 }
 
 int releaseFree(vcb *v, blocknum block) {
-    freeblock *f = freeblock_create(v->free);
-    bufdwrite(block.block, (char *) f, sizeof(freeblock));
-    block.valid = 1;
-    v->free = block;
-    freeblock_free(f);
-    return 0;
+	freeblock *f = freeblock_create(v->free);
+	bufdwrite(block.block, (char *) f, sizeof(freeblock));
+	block.valid = 1;
+	v->free = block;
+	freeblock_free(f);
+	return 0;
 }
