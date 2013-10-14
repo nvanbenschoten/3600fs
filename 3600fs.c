@@ -486,9 +486,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	}
 	
 	inode * i = inode_create(0, geteuid(), getegid(), mode);
-	clock_gettime(CLOCK_REALTIME, &(d->create_time));
-	clock_gettime(CLOCK_REALTIME, &(d->access_time));
-	clock_gettime(CLOCK_REALTIME, &(d->modify_time));
+	clock_gettime(CLOCK_REALTIME, &(i->create_time));
+	clock_gettime(CLOCK_REALTIME, &(i->access_time));
+	clock_gettime(CLOCK_REALTIME, &(i->modify_time));
 	i->direct[0] = v->free;
 	i->single_indirect = blocknum_create(0, 0);
 	i->double_indirect = blocknum_create(0, 0);
