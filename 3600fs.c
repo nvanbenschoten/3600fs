@@ -525,7 +525,85 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 					struct fuse_file_info *fi)
 {
+	// Move down path
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
 
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+			printf("Error seperating the path and filename\n");
+			return -1;
+	}
+
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
+
+	if (strcmp(path, "")) {
+			// If path isnt the root directory
+			// Transforms d to the correct directory
+			if(findDNODE(d, pathcpy, &dirBlock)) {
+					// If directory could not be found
+					printf("Could not find directory\n");
+					return -1;
+			}
+	}
+
+	inode *i_node = inode_create(0, 0, 0, 0);
+	dnode *d_temp = dnode_create(0, 0, 0, 0);
+	blocknum block;
+	int ret = getNODE(d, name, d_temp, i_node, &block, 1, dirBlock.block);
+	if (ret != 1) { // if didnt find matching file node
+		// what does findNODE return if both match??
+		inode_free(i_node);
+		dnode_free(d_temp);
+		dnode_free(d);
+		free(name);
+		free(pathcpy);
+		printf("Could not find file to delete or file is a directory");
+		return -1;
+	}
+
+        int copied = 0;
+        int block = ((int)offset)/sizeof(db);
+        int block_offset = ((int)offset) % sizeof(db);
+        char tmp[sizeof(db)];
+
+        // go to block which offset is contained in
+        // have to consider indirects here at some point also, so do the math on that one
+        // then memcpy from that block into buf, while increasing, need to maintain another
+        // offset which is the actual offset within buf, and keep repeating copying until
+        // we have copied up to size bytes, again will need to follow down indirects
+        while (copied < size && block < 110) { // 110 is the magic number of data blocks
+                // currently handles basic block copy without indirects
+                bufdread(i_node->direct[block].block, tmp, sizeof(db));
+                if (size - copied >= sizeof(db)) { // if we copy the data block until the end
+                        memcpy((char*)buf+copied, tmp+block_offset, sizeof(db)-block_offset);
+                }
+                else { // must only copy needed part of data block
+                        memcpy((char*)buf+copied, tmp+block_offset, size-copied);
+                }
+                block_offset = 0;
+                block++;
+        }
+        //if (block >= 110) { // we have to deal with indirect blocks
+        //while (copied < size && block >= 110 && block <= 99999) {
+        //        indirect *indr = indirect_create();
+        //}
+        //}
+
+        // free alloc'd vars
+        inode_free(i_node);
+        dnode_free(d_temp);
+        dnode_free(d);
+        free(name);
+        free(pathcpy);
 	return 0;
 }
 
