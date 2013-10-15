@@ -570,8 +570,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 		return -1;
 	}
 
-        int copied = 0;
-        int block = ((int)offset)/sizeof(db);
+        unsigned int copied = 0;
+        int blocks = ((int)offset)/sizeof(db);
         int block_offset = ((int)offset) % sizeof(db);
         char tmp[sizeof(db)];
 
@@ -580,9 +580,9 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
         // then memcpy from that block into buf, while increasing, need to maintain another
         // offset which is the actual offset within buf, and keep repeating copying until
         // we have copied up to size bytes, again will need to follow down indirects
-        while (copied < size && block < 110) { // 110 is the magic number of data blocks
+        while (copied < size && blocks < 110) { // 110 is the magic number of data blocks
                 // currently handles basic block copy without indirects
-                bufdread(i_node->direct[block].block, tmp, sizeof(db));
+                bufdread(i_node->direct[blocks].block, tmp, sizeof(db));
                 if (size - copied >= sizeof(db)) { // if we copy the data block until the end
                         memcpy((char*)buf+copied, tmp+block_offset, sizeof(db)-block_offset);
                         copied += sizeof(db)-block_offset;
@@ -592,16 +592,16 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                         copied += size-copied;
                 }
                 block_offset = 0;
-                block++;
+                blocks++;
         }
         // we now have to deal with single indirect blocks
         // structure here is weird not sure about ifs and loops and freeing later
-        if (copied < size && block >= 110) {
-                indirect *indr = indirect_create();
-                bufdread(i_node->single_indirect.block, (char *)indr, sizeof(indirect));
+        indirect *indr = indirect_create();
+        if (copied < size && blocks >= 110) {
+                        bufdread(i_node->single_indirect.block, (char *)indr, sizeof(indirect));
         }
-        while (copied < size && block >= 110 && block < 238) { // 238 = 110 + 128
-                bufdread(indr->blocks[block-110].block, tmp, sizeof(db));
+        while (copied < size && blocks >= 110 && blocks < 238) { // 238 = 110 + 128
+                bufdread(indr->blocks[blocks-110].block, tmp, sizeof(db));
                 if (size - copied >= sizeof(db)) { // if we copy the data block until the end
                         memcpy((char*)buf+copied, tmp, sizeof(db));
                         copied += sizeof(db);
@@ -610,9 +610,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                         memcpy((char*)buf+copied, tmp+block_offset, size-copied);
                         copied += size-copied;
                 }
-                block++;
+                blocks++;
         }
-        //}
 
         // free alloc'd vars
         inode_free(i_node);
@@ -620,8 +619,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
         dnode_free(d);
         free(name);
         free(pathcpy);
-        if (block >= 110) // if we allocated an indirect block
-                free(indr); // free it
+        //if (blocks >= 110) // if we allocated an indirect block
+        free(indr); 
 
 	return 0;
 }
