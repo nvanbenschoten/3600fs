@@ -585,17 +585,33 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                 bufdread(i_node->direct[block].block, tmp, sizeof(db));
                 if (size - copied >= sizeof(db)) { // if we copy the data block until the end
                         memcpy((char*)buf+copied, tmp+block_offset, sizeof(db)-block_offset);
+                        copied += sizeof(db)-block_offset;
                 }
                 else { // must only copy needed part of data block
                         memcpy((char*)buf+copied, tmp+block_offset, size-copied);
+                        copied += size-copied;
                 }
                 block_offset = 0;
                 block++;
         }
-        //if (block >= 110) { // we have to deal with indirect blocks
-        //while (copied < size && block >= 110 && block <= 99999) {
-        //        indirect *indr = indirect_create();
-        //}
+        // we now have to deal with single indirect blocks
+        // structure here is weird not sure about ifs and loops and freeing later
+        if (copied < size && block >= 110) {
+                indirect *indr = indirect_create();
+                bufdread(i_node->single_indirect.block, (char *)indr, sizeof(indirect));
+        }
+        while (copied < size && block >= 110 && block < 238) { // 238 = 110 + 128
+                bufdread(indr->blocks[block-110].block, tmp, sizeof(db));
+                if (size - copied >= sizeof(db)) { // if we copy the data block until the end
+                        memcpy((char*)buf+copied, tmp, sizeof(db));
+                        copied += sizeof(db);
+                }
+                else { // must only copy needed part of data block
+                        memcpy((char*)buf+copied, tmp+block_offset, size-copied);
+                        copied += size-copied;
+                }
+                block++;
+        }
         //}
 
         // free alloc'd vars
@@ -604,6 +620,9 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
         dnode_free(d);
         free(name);
         free(pathcpy);
+        if (block >= 110) // if we allocated an indirect block
+                free(indr); // free it
+
 	return 0;
 }
 
