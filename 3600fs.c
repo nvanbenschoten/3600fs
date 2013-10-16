@@ -895,18 +895,60 @@ static int vfs_delete(const char *path)
 
 	// Frees data blocks
 	int i;
-	unsigned int count = 0;
-	for (i = 0; count < i_node->size && i < 110; i++) {
+	for (i = 0; i < 110; i++) {
 		// i = direct blocks
 		// Count number of valid while comparing until all are acocunted for
-		if (i_node->direct[i].valid) {
-			count++;   
+		if (i_node->direct[i].valid) { 
 			// Free data here
 			releaseFree(v, i_node->direct[i]);
 		}
 	}
 
-	
+	if (i_node->single_indirect.valid) {
+		// Single indirect
+		indirect *ind = indirect_create();
+		bufdread(i_node->single_indirect.block, (char *)ind, sizeof(indirect));
+
+		for (i = 0; i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			if (ind->blocks[i].valid) {
+				// Free data here
+				releaseFree(v, ind->blocks[i]);
+			}
+		}
+
+		indirect_free(ind);
+	}
+
+	if (i_node->double_indirect.valid) {
+		// Double indirect
+		indirect *firstind = indirect_create();
+		bufdread(i_node->double_indirect.block, (char *)firstind, sizeof(indirect));
+		
+		for (i = 0; i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			if (firstind->blocks[i].valid) {
+
+				indirect *secind = indirect_create();
+				bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+
+				int k;
+				for (k = 0; k < 128; k++) {
+
+					if (secind->blocks[k].valid) {
+						// Free data here
+						releaseFree(v, secind->blocks[k]);
+					}
+				}
+				indirect_free(secind);	
+			}
+		}
+		indirect_free(firstind);
+	} 
 
 	// Frees inode block itself
 	releaseFree(v, block);
@@ -1275,52 +1317,9 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 	for (i = 0; count < directory->size && i < 110; i++) {
 		// i = direct blocks
 		// Count number of valid while comparing until all are acocunted for
-		dirent *de = dirent_create();
-
-		bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
-
-		int j;
-		for (j = 0; count < directory->size && j < 16; j++) {
-			// j = direntry entry
-			if (de->entries[j].block.valid) {
-				count++;
-				if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
-					// If match found, overwrite current dnode
-					block->block = de->entries[j].block.block;
-					block->block = de->entries[j].block.valid;
-
-					bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
-					free(searchPath);
-					dirent_free(de);
-					if (hitFirstBackslashFlag) {
-						// More to path
-						int ret = findDNODE(directory, restOfPath, block);
-						free(restOfPath);
-						return ret;
-					}
-					else {
-						// Found correct one
-						free(restOfPath);
-						return 0;
-					}
-				}
-			}
-		}
-
-		dirent_free(de);
-	}
-
-	if (directory->size > 16*110) {
-		// Single indirect
-		indirect *ind = indirect_create();
-		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
-
-		for (i = 0; count < directory->size && i < 128; i++) {
-			// i = direct blocks
-			// Count number of valid while comparing until all are acocunted for
-
+		if (directory->direct[i].valid) {
 			dirent *de = dirent_create();
-			bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
+			bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 			int j;
 			for (j = 0; count < directory->size && j < 16; j++) {
@@ -1335,7 +1334,6 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 						bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 						free(searchPath);
 						dirent_free(de);
-						indirect_free(ind);
 						if (hitFirstBackslashFlag) {
 							// More to path
 							int ret = findDNODE(directory, restOfPath, block);
@@ -1353,26 +1351,20 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 
 			dirent_free(de);
 		}
-
-		indirect_free(ind);
 	}
 
-	if (directory->size > 16*110+16*128) {
-		// Double indirect
-		indirect *firstind = indirect_create();
-		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
-		
+	if (directory->single_indirect.valid) {
+		// Single indirect
+		indirect *ind = indirect_create();
+		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
+
 		for (i = 0; count < directory->size && i < 128; i++) {
 			// i = direct blocks
 			// Count number of valid while comparing until all are acocunted for
+			if (ind->blocks[i].valid) {
 
-			indirect *secind = indirect_create();
-			bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
-
-			int k;
-			for (k = 0; count < directory->size && k < 128; k++) {
 				dirent *de = dirent_create();
-				bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
+				bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
 
 				int j;
 				for (j = 0; count < directory->size && j < 16; j++) {
@@ -1381,17 +1373,13 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 						count++;
 						if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
 							// If match found, overwrite current dnode
-
 							block->block = de->entries[j].block.block;
 							block->block = de->entries[j].block.valid;
-							
+
 							bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
-							// Free variables
 							free(searchPath);
 							dirent_free(de);
-							indirect_free(firstind);
-							indirect_free(secind);
-
+							indirect_free(ind);
 							if (hitFirstBackslashFlag) {
 								// More to path
 								int ret = findDNODE(directory, restOfPath, block);
@@ -1409,11 +1397,69 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 
 				dirent_free(de);
 			}
-
-			indirect_free(secind);
-			
 		}
 
+		indirect_free(ind);
+	}
+
+	if (directory->double_indirect.valid) {
+		// Double indirect
+		indirect *firstind = indirect_create();
+		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
+		
+		for (i = 0; count < directory->size && i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			if (firstind->blocks[i].valid) {
+
+				indirect *secind = indirect_create();
+				bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+
+				int k;
+				for (k = 0; count < directory->size && k < 128; k++) {
+					if (secind->blocks[k].valid) {
+						dirent *de = dirent_create();
+						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
+
+						int j;
+						for (j = 0; count < directory->size && j < 16; j++) {
+							// j = direntry entry
+							if (de->entries[j].block.valid) {
+								count++;
+								if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
+									// If match found, overwrite current dnode
+
+									block->block = de->entries[j].block.block;
+									block->block = de->entries[j].block.valid;
+									
+									bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
+									// Free variables
+									free(searchPath);
+									dirent_free(de);
+									indirect_free(firstind);
+									indirect_free(secind);
+
+									if (hitFirstBackslashFlag) {
+										// More to path
+										int ret = findDNODE(directory, restOfPath, block);
+										free(restOfPath);
+										return ret;
+									}
+									else {
+										// Found correct one
+										free(restOfPath);
+										return 0;
+									}
+								}
+							}
+						}
+						dirent_free(de);
+					}
+				}
+				indirect_free(secind);
+			}
+		}
 		indirect_free(firstind);
 	} 
 
@@ -1446,95 +1492,18 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 	for (i = 0; count < directory->size && i < 110; i++) {
 		// i = direct blocks
 		// Count number of valid while comparing until all are acocunted for
-		dirent *de = dirent_create();
-
-		bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
-
-		int j;
-		for (j = 0; count < directory->size && j < 16; j++) {
-			// j = direntry entry
-			if (de->entries[j].block.valid) {
-				count++;
-				if (!strcmp(name, de->entries[j].name)) {
-					// Found it!
-					dir = de->entries[j];
-
-					if (dir.type == 0) {
-						// If the dirent is for a directory
-						bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
-						retBlock->block = dir.block.block;
-						retBlock->valid = 1;
-					}
-					else {
-						// If the dirent is for a file
-						bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
-						retBlock->block = dir.block.block;
-						retBlock->valid = 1;
-					}
-
-					if (deleteFlag) {
-						int empty = 0;
-						int l;
-						// Set direntry to invalid
-						de->entries[j].block.valid = 0;
-						for (l = 0; l < 16; l ++) {
-							if (de->entries[l].block.valid) {
-								empty++;
-							}
-						}
-
-						if (empty < 1) {
-							// Only direntry is the one that is being deleted
-							releaseFree(v, directory->direct[i]);
-							directory->direct[i].valid = 0;
-						}
-
-						else {
-							// More than one valid direntry in dirent
-							bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
-						}
-
-						directory->size--;
-						bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
-					}
-
-					dirent_free(de);
-
-					if (dir.type == 0) {
-						// If the dirent is for a directory
-						return 0;
-					}
-					else {
-						// If the dirent is for a file
-						return 1;
-					}
-				}
-			}
-		}
-
-		dirent_free(de);
-	}
-
-	if (directory->size > 16*110) {
-		// Single indirect
-		indirect *ind = indirect_create();
-		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
-
-		for (i = 0; count < directory->size && i < 128; i++) {
-			// Cycles through indirect block
-
+		if (directory->direct[i].valid) {
 			dirent *de = dirent_create();
-			bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
+			bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 			int j;
 			for (j = 0; count < directory->size && j < 16; j++) {
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
-					if (!strcmp(de->entries[j].name, name)) {
+					if (!strcmp(name, de->entries[j].name)) {
 						// Found it!
 						dir = de->entries[j];
-						indirect_free(ind);
 
 						if (dir.type == 0) {
 							// If the dirent is for a directory
@@ -1554,8 +1523,6 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 							int l;
 							// Set direntry to invalid
 							de->entries[j].block.valid = 0;
-
-							// Cycle over dirent to count direntries
 							for (l = 0; l < 16; l ++) {
 								if (de->entries[l].block.valid) {
 									empty++;
@@ -1564,32 +1531,13 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 							if (empty < 1) {
 								// Only direntry is the one that is being deleted
-								releaseFree(v, ind->blocks[i]);
-								ind->blocks[i].valid = 0;
-
-								// Make sure indirect isn't empty
-								int indEmpty = 0;
-								int m;
-								for (m = 0; m < 128; m++) {
-									if (ind->blocks[m].valid) {
-										indEmpty++;
-									}
-								}
-
-								if (indEmpty < 1) {
-									// only block in ind was deleted
-									releaseFree(v, directory->single_indirect);
-									directory->single_indirect.valid = 0;
-								}
-								else {
-									// More blocks in ind
-									bufdwrite(directory->single_indirect.block, (char *)ind, sizeof(indirect));
-								}
-
+								releaseFree(v, directory->direct[i]);
+								directory->direct[i].valid = 0;
 							}
+
 							else {
 								// More than one valid direntry in dirent
-								bufdwrite(ind->blocks[i].block, (char *)de, sizeof(dirent));
+								bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
 							}
 
 							directory->size--;
@@ -1612,26 +1560,20 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 			dirent_free(de);
 		}
-
-		indirect_free(ind);
 	}
 
-	if (directory->size > 16*110+16*128) {
-		// Double indirect
-		indirect *firstind = indirect_create();
-		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
-		
+	if (directory->single_indirect.valid) {
+		// Single indirect
+		indirect *ind = indirect_create();
+		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
+
 		for (i = 0; count < directory->size && i < 128; i++) {
-			// i = direct blocks
-			// Count number of valid while comparing until all are acocunted for
+			// Cycles through indirect block
 
-			indirect *secind = indirect_create();
-			bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+			if (ind->blocks[i].valid) {
 
-			int k;
-			for (k = 0; count < directory->size && k < 128; k++) {
 				dirent *de = dirent_create();
-				bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
+				bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
 
 				int j;
 				for (j = 0; count < directory->size && j < 16; j++) {
@@ -1641,8 +1583,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 						if (!strcmp(de->entries[j].name, name)) {
 							// Found it!
 							dir = de->entries[j];
-							indirect_free(firstind);
-							indirect_free(secind);
+							indirect_free(ind);
 
 							if (dir.type == 0) {
 								// If the dirent is for a directory
@@ -1663,6 +1604,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 								// Set direntry to invalid
 								de->entries[j].block.valid = 0;
 
+								// Cycle over dirent to count direntries
 								for (l = 0; l < 16; l ++) {
 									if (de->entries[l].block.valid) {
 										empty++;
@@ -1671,52 +1613,32 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 								if (empty < 1) {
 									// Only direntry is the one that is being deleted
-									releaseFree(v, secind->blocks[k]);
-									secind->blocks[k].valid = 0;
+									releaseFree(v, ind->blocks[i]);
+									ind->blocks[i].valid = 0;
 
-									// Make sure second indirect isn't empty
+									// Make sure indirect isn't empty
 									int indEmpty = 0;
 									int m;
 									for (m = 0; m < 128; m++) {
-										if (secind->blocks[m].valid) {
+										if (ind->blocks[m].valid) {
 											indEmpty++;
 										}
 									}
 
 									if (indEmpty < 1) {
 										// only block in ind was deleted
-										releaseFree(v, firstind->blocks[i]);
-										firstind->blocks[i].valid = 0;
-
-										// Make sure second indirect isn't empty
-										int firstindEmpty = 0;
-										int n;
-										for (n = 0; n < 128; n++) {
-											if (firstind->blocks[n].valid) {
-												firstindEmpty++;
-											}
-										}
-
-										if (firstindEmpty < 1) {
-											// only block in ind was deleted
-											releaseFree(v, directory->double_indirect);
-											directory->double_indirect.valid = 0;
-										}
-										else {
-											// More blocks in firstind
-											bufdwrite(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
-										}
+										releaseFree(v, directory->single_indirect);
+										directory->single_indirect.valid = 0;
 									}
 									else {
-										// More blocks in secind
-										bufdwrite(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+										// More blocks in ind
+										bufdwrite(directory->single_indirect.block, (char *)ind, sizeof(indirect));
 									}
 
 								}
 								else {
 									// More than one valid direntry in dirent
-									de->entries[j].block.valid = 0;
-									bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
+									bufdwrite(ind->blocks[i].block, (char *)de, sizeof(dirent));
 								}
 
 								directory->size--;
@@ -1739,8 +1661,143 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 				dirent_free(de);
 			}
+		}
 
-			indirect_free(secind);
+		indirect_free(ind);
+	}
+
+	if (directory->double_indirect.valid) {
+		// Double indirect
+		indirect *firstind = indirect_create();
+		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
+		
+		for (i = 0; count < directory->size && i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			if (firstind->blocks[i].valid) {
+
+				indirect *secind = indirect_create();
+				bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+
+				int k;
+				for (k = 0; count < directory->size && k < 128; k++) {
+
+					if (secind->blocks[k].valid) {
+
+						dirent *de = dirent_create();
+						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
+
+						int j;
+						for (j = 0; count < directory->size && j < 16; j++) {
+							// j = direntry entry
+							if (de->entries[j].block.valid) {
+								count++;
+								if (!strcmp(de->entries[j].name, name)) {
+									// Found it!
+									dir = de->entries[j];
+									indirect_free(firstind);
+									indirect_free(secind);
+
+									if (dir.type == 0) {
+										// If the dirent is for a directory
+										bufdread(dir.block.block, (char *)searchDnode, sizeof(dnode));
+										retBlock->block = dir.block.block;
+										retBlock->valid = 1;
+									}
+									else {
+										// If the dirent is for a file
+										bufdread(dir.block.block, (char *)searchInode, sizeof(inode));
+										retBlock->block = dir.block.block;
+										retBlock->valid = 1;
+									}
+
+									if (deleteFlag) {
+										int empty = 0;
+										int l;
+										// Set direntry to invalid
+										de->entries[j].block.valid = 0;
+
+										for (l = 0; l < 16; l ++) {
+											if (de->entries[l].block.valid) {
+												empty++;
+											}
+										}
+
+										if (empty < 1) {
+											// Only direntry is the one that is being deleted
+											releaseFree(v, secind->blocks[k]);
+											secind->blocks[k].valid = 0;
+
+											// Make sure second indirect isn't empty
+											int indEmpty = 0;
+											int m;
+											for (m = 0; m < 128; m++) {
+												if (secind->blocks[m].valid) {
+													indEmpty++;
+												}
+											}
+
+											if (indEmpty < 1) {
+												// only block in ind was deleted
+												releaseFree(v, firstind->blocks[i]);
+												firstind->blocks[i].valid = 0;
+
+												// Make sure second indirect isn't empty
+												int firstindEmpty = 0;
+												int n;
+												for (n = 0; n < 128; n++) {
+													if (firstind->blocks[n].valid) {
+														firstindEmpty++;
+													}
+												}
+
+												if (firstindEmpty < 1) {
+													// only block in ind was deleted
+													releaseFree(v, directory->double_indirect);
+													directory->double_indirect.valid = 0;
+												}
+												else {
+													// More blocks in firstind
+													bufdwrite(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
+												}
+											}
+											else {
+												// More blocks in secind
+												bufdwrite(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+											}
+
+										}
+										else {
+											// More than one valid direntry in dirent
+											de->entries[j].block.valid = 0;
+											bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
+										}
+
+										directory->size--;
+										bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
+									}
+
+									dirent_free(de);
+
+									if (dir.type == 0) {
+										// If the dirent is for a directory
+										return 0;
+									}
+									else {
+										// If the dirent is for a file
+										return 1;
+									}
+								}
+							}
+						}
+
+						dirent_free(de);
+					}
+				}
+
+				indirect_free(secind);
+			}
 			
 		}
 
@@ -1758,7 +1815,10 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 int getNextFree(vcb *v) {
 	int writenum = v->free.block;
 	freeblock * f = freeblock_create(blocknum_create(0, 0)); // the next free blocknum
-	bufdread(v->free.block, (char *) f, sizeof(freeblock));
+	if (v->free.valid)
+		bufdread(v->free.block, (char *) f, sizeof(freeblock));
+	else
+		return -1;
 	v->free = f->next;
 	free(f);
 	return writenum;
