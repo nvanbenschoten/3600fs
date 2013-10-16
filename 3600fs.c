@@ -1184,16 +1184,17 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 					}
 
 					if (deleteFlag) {
-						// Set to 2 to see if anything else is valid in the dirent
 						int empty = 0;
 						int l;
+						// Set direntry to invalid
+						de->entries[j].block.valid = 0;
 						for (l = 0; l < 16; l ++) {
 							if (de->entries[l].block.valid) {
 								empty++;
 							}
 						}
 
-						if (empty < 2) {
+						if (empty < 1) {
 							// Only direntry is the one that is being deleted
 							releaseFree(v, directory->direct[i]);
 							directory->direct[i].valid = 0;
@@ -1201,7 +1202,6 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 						else {
 							// More than one valid direntry in dirent
-							de->entries[j].block.valid = 0;
 							bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
 						}
 
@@ -1228,13 +1228,11 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 	if (directory->size > 16*110) {
 		// Single indirect
-		// Single indirect
 		indirect *ind = indirect_create();
 		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
 
 		for (i = 0; count < directory->size && i < 128; i++) {
-			// i = direct blocks
-			// Count number of valid while comparing until all are acocunted for
+			// Cycles through indirect block
 
 			dirent *de = dirent_create();
 			bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
@@ -1263,25 +1261,46 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 						}
 
 						if (deleteFlag) {
-							// Set to 2 to see if anything else is valid in the dirent
 							int empty = 0;
 							int l;
+							// Set direntry to invalid
+							de->entries[j].block.valid = 0;
+
+							// Cycle over dirent to count direntries
 							for (l = 0; l < 16; l ++) {
 								if (de->entries[l].block.valid) {
 									empty++;
 								}
 							}
 
-							if (empty < 2) {
+							if (empty < 1) {
 								// Only direntry is the one that is being deleted
-								releaseFree(v, directory->direct[i]);
-								directory->direct[i].valid = 0;
-							}
+								releaseFree(v, ind->blocks[i]);
+								ind->blocks[i].valid = 0;
 
+								// Make sure indirect isn't empty
+								int indEmpty = 0;
+								int m;
+								for (m = 0; m < 128; m++) {
+									if (ind->blocks[m].valid) {
+										indEmpty++;
+									}
+								}
+
+								if (indEmpty < 1) {
+									// only block in ind was deleted
+									releaseFree(v, directory->single_indirect);
+									directory->single_indirect.valid = 0;
+								}
+								else {
+									// More blocks in ind
+									bufdwrite(directory->single_indirect.block, (char *)ind, sizeof(indirect));
+								}
+
+							}
 							else {
 								// More than one valid direntry in dirent
-								de->entries[j].block.valid = 0;
-								bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
+								bufdwrite(ind->block[i].block, (char *)de, sizeof(dirent));
 							}
 
 							directory->size--;
