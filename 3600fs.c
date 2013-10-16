@@ -657,9 +657,67 @@ static int vfs_rename(const char *from, const char *to)
  * fcb->mode = (mode & 0x0000ffff);
  *
  */
-static int vfs_chmod(const char *file, mode_t mode)
+static int vfs_chmod(const char *path, mode_t mode)
 {
+	// Determine correct file and path from the name
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
 
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+		printf("Error seperating the path and filename\n");
+		return -1;
+	}
+
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
+
+	if (strcmp(pathcpy, "/")) {
+		// If path isnt the root directory
+		// Transforms d to the correct directory
+		if(findDNODE(d, pathcpy, &dirBlock)) {
+			// If directory could not be found
+			printf("Could not find directory\n");
+			return -1;
+		}
+	}
+
+	if (!strcmp(name, "")) {
+		// If name is blank, it means that it is refering to the current directory
+		strcpy(name, ".");
+	}
+
+	dnode *matchd = dnode_create(0, 0, 0, 0);
+	inode *matchi = inode_create(0, 0, 0, 0);
+	
+	blocknum block;
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0);
+	dnode_free(d);
+
+	// Check to see if match is valid
+	if (ret < 0) {
+		printf("Could not find file\n");
+		return -1;
+	}
+	else if (ret == 0) {
+		// If the dirent is for a directory
+		matchd->mode = mode; // Directory node
+		bufdwrite(block.block, (char *) matchd, sizeof(dnode));
+	}
+	else if (ret == 1) {
+		// If the dirent is for a file
+		matchi->mode = mode;
+		bufdwrite(block.block, (char *) matchi, sizeof(inode));
+	}
+
+	dnode_free(matchd);
+	inode_free(matchi);
 	return 0;
 }
 
@@ -668,7 +726,7 @@ static int vfs_chmod(const char *file, mode_t mode)
  * to be uid and gid.  This should only update the file's owner
  * and group.
  */
-static int vfs_chown(const char *file, uid_t uid, gid_t gid)
+static int vfs_chown(const char *path, uid_t uid, gid_t gid)
 {
 
 	return 0;
