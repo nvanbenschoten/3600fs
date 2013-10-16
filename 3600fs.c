@@ -906,7 +906,54 @@ static int vfs_delete(const char *path)
 		}
 	}
 
-	// -> then need to also do same for single and double indirects...
+	if (directory->size > 16*110) {
+		// Single indirect
+		indirect *ind = indirect_create();
+		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
+
+		for (i = 0; count < directory->size && i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			if (ind->blocks[i].valid) {
+				count++;   
+				// Free data here
+				releaseFree(v, ind->blocks[i]);
+			}
+		}
+
+		indirect_free(ind);
+	}
+
+	if (directory->size > 16*110+16*128) {
+		// Double indirect
+		indirect *firstind = indirect_create();
+		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
+		
+		for (i = 0; count < directory->size && i < 128; i++) {
+			// i = direct blocks
+			// Count number of valid while comparing until all are acocunted for
+
+			indirect *secind = indirect_create();
+			bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+
+			int k;
+			for (k = 0; count < directory->size && k < 128; k++) {
+
+				if (secind->blocks[k].valid) {
+					count++;   
+					// Free data here
+					releaseFree(v, secind->blocks[k]);
+				}
+
+			}
+
+			indirect_free(secind);
+			
+		}
+
+		indirect_free(firstind);
+	} 
 
 	// Frees inode block itself
 	releaseFree(v, block);
