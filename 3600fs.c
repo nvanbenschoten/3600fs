@@ -765,7 +765,7 @@ static int vfs_delete(const char *path)
 		}
 	}
 
-	// -> then need to also do same for single and double indirects...
+	
 
 	// Frees inode block itself
 	releaseFree(v, block);
