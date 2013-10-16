@@ -776,14 +776,14 @@ static int vfs_chown(const char *path, uid_t uid, gid_t gid)
 	}
 	else if (ret == 0) {
 		// If the dirent is for a directory
-		matchd->uid = uid; // Directory node
-		matchd->gid = gid;
+		matchd->user = uid; // Directory node
+		matchd->group = gid;
 		bufdwrite(block.block, (char *) matchd, sizeof(dnode));
 	}
 	else if (ret == 1) {
 		// If the dirent is for a file
-		matchi->uid = uid; // File node
-		matchi->gid = gid;
+		matchi->user = uid; // File node
+		matchi->group = gid;
 		bufdwrite(block.block, (char *) matchi, sizeof(inode));
 	}
 
