@@ -906,12 +906,12 @@ static int vfs_delete(const char *path)
 		}
 	}
 
-	if (directory->size > 16*110) {
+	if (i_node->size > 16*110) {
 		// Single indirect
 		indirect *ind = indirect_create();
-		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
+		bufdread(i_node->single_indirect.block, (char *)ind, sizeof(indirect));
 
-		for (i = 0; count < directory->size && i < 128; i++) {
+		for (i = 0; count < i_node->size && i < 128; i++) {
 			// i = direct blocks
 			// Count number of valid while comparing until all are acocunted for
 
@@ -925,12 +925,12 @@ static int vfs_delete(const char *path)
 		indirect_free(ind);
 	}
 
-	if (directory->size > 16*110+16*128) {
+	if (i_node->size > 16*110+16*128) {
 		// Double indirect
 		indirect *firstind = indirect_create();
-		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
+		bufdread(i_node->double_indirect.block, (char *)firstind, sizeof(indirect));
 		
-		for (i = 0; count < directory->size && i < 128; i++) {
+		for (i = 0; count < i_node->size && i < 128; i++) {
 			// i = direct blocks
 			// Count number of valid while comparing until all are acocunted for
 
@@ -938,7 +938,7 @@ static int vfs_delete(const char *path)
 			bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
 
 			int k;
-			for (k = 0; count < directory->size && k < 128; k++) {
+			for (k = 0; count < i_node->size && k < 128; k++) {
 
 				if (secind->blocks[k].valid) {
 					count++;   
