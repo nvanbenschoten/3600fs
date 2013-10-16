@@ -17,7 +17,9 @@
 
 #include "disk.h"
 
- extern const int DISKNUMBER;
+#define UNUSED(x) (void)(x)
+
+extern const int DISKNUMBER;
 
 // Defining structures
 typedef struct blocknum_t {

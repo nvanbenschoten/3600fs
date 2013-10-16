@@ -44,6 +44,8 @@ vcb *v;
  *
  */
 static void* vfs_mount(struct fuse_conn_info *conn) {
+	UNUSED(conn);
+
 	fprintf(stderr, "vfs_mount called\n");
 
 	// Do not touch or move this code; connects the disk
@@ -71,6 +73,8 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
  *
  */
 static void vfs_unmount (void *private_data) {
+	UNUSED(private_data);
+
 	fprintf(stderr, "vfs_unmount called\n");
 
 	/* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
@@ -258,7 +262,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 					if(filler(buf, de->entries[j].name, NULL, count)) {
 						dirent_free(de);
 						dnode_free(d);
-						return 1;
+						return 0;
 					}
 				}
 			}
@@ -292,7 +296,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 							indirect_free(ind);
 							dirent_free(de);
 							dnode_free(d);
-							return 1;
+							return 0;
 						}
 					}
 				}
@@ -342,7 +346,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 									indirect_free(secind);
 									dirent_free(de);
 									dnode_free(d);
-									return 1;
+									return 0;
 								}
 							}
 						}
