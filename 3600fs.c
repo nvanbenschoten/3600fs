@@ -221,6 +221,8 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 					   off_t offset, struct fuse_file_info *fi)
 {
+	UNUSED(fi);
+
 	if (path[0] != '/')
 		return -1;
 
@@ -381,6 +383,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+	UNUSED(fi);
 
 	// Move down path
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
