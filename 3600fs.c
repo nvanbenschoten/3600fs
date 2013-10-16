@@ -1383,7 +1383,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 								if (empty < 1) {
 									// Only direntry is the one that is being deleted
 									releaseFree(v, secind->blocks[k]);
-									ind->blocks[k].valid = 0;
+									secind->blocks[k].valid = 0;
 
 									// Make sure second indirect isn't empty
 									int indEmpty = 0;
