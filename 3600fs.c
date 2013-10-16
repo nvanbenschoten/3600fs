@@ -1300,7 +1300,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 							}
 							else {
 								// More than one valid direntry in dirent
-								bufdwrite(ind->block[i].block, (char *)de, sizeof(dirent));
+								bufdwrite(ind->blocks[i].block, (char *)de, sizeof(dirent));
 							}
 
 							directory->size--;
@@ -1369,21 +1369,61 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 							}
 
 							if (deleteFlag) {
-								// Set to 2 to see if anything else is valid in the dirent
 								int empty = 0;
 								int l;
+								// Set direntry to invalid
+								de->entries[j].block.valid = 0;
+
 								for (l = 0; l < 16; l ++) {
 									if (de->entries[l].block.valid) {
 										empty++;
 									}
 								}
 
-								if (empty < 2) {
+								if (empty < 1) {
 									// Only direntry is the one that is being deleted
-									releaseFree(v, directory->direct[i]);
-									directory->direct[i].valid = 0;
-								}
+									releaseFree(v, secind->blocks[k]);
+									ind->blocks[k].valid = 0;
 
+									// Make sure second indirect isn't empty
+									int indEmpty = 0;
+									int m;
+									for (m = 0; m < 128; m++) {
+										if (secind->blocks[m].valid) {
+											indEmpty++;
+										}
+									}
+
+									if (indEmpty < 1) {
+										// only block in ind was deleted
+										releaseFree(v, firstind->blocks[i]);
+										firstind->blocks[i].valid = 0;
+
+										// Make sure second indirect isn't empty
+										int firstindEmpty = 0;
+										int n;
+										for (n = 0; n < 128; n++) {
+											if (firstind->blocks[n].valid) {
+												firstindEmpty++;
+											}
+										}
+
+										if (firstindEmpty < 1) {
+											// only block in ind was deleted
+											releaseFree(v, directory->double_indirect);
+											directory->double_indirect.valid = 0;
+										}
+										else {
+											// More blocks in firstind
+											bufdwrite(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
+										}
+									}
+									else {
+										// More blocks in secind
+										bufdwrite(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
+									}
+
+								}
 								else {
 									// More than one valid direntry in dirent
 									de->entries[j].block.valid = 0;
