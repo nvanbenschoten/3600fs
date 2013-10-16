@@ -790,16 +790,75 @@ static int vfs_chown(const char *path, uid_t uid, gid_t gid)
 	dnode_free(matchd);
 	inode_free(matchi);
 	return 0;
-	return 0;
 }
 
 /*
  * This function will update the file's last accessed time to
  * be ts[0] and will update the file's last modified time to be ts[1].
  */
-static int vfs_utimens(const char *file, const struct timespec ts[2])
+static int vfs_utimens(const char *path, const struct timespec ts[2])
 {
+	// Determine correct file and path from the name
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
 
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+		printf("Error seperating the path and filename\n");
+		return -1;
+	}
+
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
+
+	if (strcmp(pathcpy, "/")) {
+		// If path isnt the root directory
+		// Transforms d to the correct directory
+		if(findDNODE(d, pathcpy, &dirBlock)) {
+			// If directory could not be found
+			printf("Could not find directory\n");
+			return -1;
+		}
+	}
+
+	if (!strcmp(name, "")) {
+		// If name is blank, it means that it is refering to the current directory
+		strcpy(name, ".");
+	}
+
+	dnode *matchd = dnode_create(0, 0, 0, 0);
+	inode *matchi = inode_create(0, 0, 0, 0);
+	
+	blocknum block;
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0);
+	dnode_free(d);
+
+	// Check to see if match is valid
+	if (ret < 0) {
+		printf("Could not find file\n");
+		return -1;
+	}
+	else if (ret == 0) {
+		// If the dirent is for a directory
+		matchd->access_time = ts[0]; // Directory node
+		matchd->modify_time = ts[1];
+		bufdwrite(block.block, (char *) matchd, sizeof(dnode));
+	}
+	else if (ret == 1) {
+		// If the dirent is for a file
+		matchi->access_time = ts[0]; // File node
+		matchi->modify_time = ts[1];
+		bufdwrite(block.block, (char *) matchi, sizeof(inode));
+	}
+
+	dnode_free(matchd);
+	inode_free(matchi);
 	return 0;
 }
 
