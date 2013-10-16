@@ -426,66 +426,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		dnode_free(temp_d);
 		inode_free(temp_i);
 	}
-        /*
-	// What if the dirent is only half full of valid direntries?
-	// Should we fix that to have more efficient memory storage?
-	// Also, what if there are no dirents with empty slots and we need to allocate a new one?
-	int d_last_eb = 0;
-        int i = 0, j = 0;
-        int inode_block = -1;
-	dirent *de = dirent_create();
-        // find first invalid directory entry block
-	while (inode_block == -1 && d_last_eb < 110 && d->direct[d_last_eb].valid) {
-                bufdread(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
-                for (i = 0; i < 16; i++) { 
-                        if (!de->entries[i].block.valid) { // we found our write location
-                                strcpy(de->entries[i].name, name);
-                                de->entries[i].type = 1;
-                                de->entries[i].block = blocknum_create(getNextFree(v), 1);
-                                inode_block = de->entries[i].block.block;
-                                bufdwrite(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
-                                break;
-                        }
-                }
-                //if (inode_block != -1) { // we no longer need to look for write location
-                //        break;
-                /}
-		d_last_eb++;
-	}
-        indirect *indr = indirect_create(); 
-        // can probably consolidate this into one while loop with ifs so the for loop doesnt
-        // have to be reapeated...
-        if (inode_block == -1)
-                bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
-        while (inode_block == -1 && d_last_eb >= 110 && d_last_eb < 111) { // traverse up to 128 * 16 direntries
-                // if didnt find, we need to start looking in indirect blocks
-                for (i = 0; i < 128; i++) {
-                        if (indr.blocks[i].valid) {
-                                bufdread(indr.blocks[i].block, (char *) de, sizeof(dirent));
-                                for (j = 0; j < 16; j++) {
-                                        if (!de->entries[j].block.valid) {
-                                                strcpy(de->entries[j].name, name);
-                                                de->entries[j].type = 1;
-                                                de->entries[j].block = blocknum_create(getNextFree(v), 1);
-                                                inode_block = de->entries[j].block.block;
-                                                //bufdwrite(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
-                                                break;
-                                        }
-                                }
-                        }
-                }
-                d_last_eb++;
-        }
-        // last loop to handle double indirects jesus
-        indirect *indr2 = indirect_create();
-        if (inode_block == -1)
-                bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect));
-        //while 
-        */
-
-        ///////////////////////////////////////////////
-        // REFACTORING BLOCK
-        ///////////////////////////////////////////////
         // while we havent found a dirent
         int inode_block = -1;
         int i = 0, j = 0, ent_b = 0, lvl = 0;
@@ -571,11 +511,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         free(de);
                         free(de_new);
                         free(i_new);
-                        // ERROROROROROR
+                        // error
                         printf("Error no directory entry available to create file.\n");
                         return -1;
-                        // break DONT EVEN NEED TO BREAK
-                        //break;
                 }
         }
         if (ent_b != 0) { // if we changed ent_b its off by one for final dbs comparison 
@@ -618,85 +556,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
         free(i_new);
         
         return 0;
-
-        ///////////////////////////////////////////////
-        // END REFACTORING BLOCK
-        ///////////////////////////////////////////////
-        /*
-	//d_last_eb--;
-
-	// read directory entry block
-	bufdread(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
-
-	int d_last_ent = 0;
-	while (((unsigned int)d_last_ent < (unsigned int)sizeof(dirent)/sizeof(direntry)) &&
-		de->entries[d_last_ent].block.valid) {
-		d_last_ent++;
-	}
-
-	if (d_last_ent == sizeof(dirent)/sizeof(direntry)) { // if need to allocate a new dirent
-		// modify d_last_eb and d_last_ent to point to new block & entry
-		while (d->direct[d_last_eb].valid) {
-			// COMMENT This is going to have to be recursive for it to truly work
-			d_last_eb++;
-		}
-		d->direct[d_last_eb] = v->free; // set next dirent blocknum to be next free block
-		dirent *de_new = dirent_create(); // create new dirent
-		free(de); // free the old dirent as we are replacing it
-		de = de_new; // reassign old dirent to new dirent
-		d_last_ent = 0; // set last entry to be first entry because new dirent
-		d->size += 1; // add new block to size
-		
-		if (getNextFree(v) < 0) {
-			printf("No free blocks available\n");
-			return -1;
-		}
-		
-		// if all those are valid go to next indirect etc
-		// could probably use find next invalid function, will run into problems with reusing
-		// dirent blocks as well...
-	}
-	
-	// write info to dirent block
-	strcpy(de->entries[d_last_ent].name, name);
-	de->entries[d_last_ent].type = 1;
-	de->entries[d_last_ent].block = blocknum_create(v->free.block, 1);
-	bufdwrite(d->direct[d_last_eb].block, (char *) de, sizeof(dirent));
-
-	// Update dnode
-	d->size += 1;
-	bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
-
-	int writenum;// = getNextFree(v);
-	if ((writenum = getNextFree(v)) < 0) {
-		// Could not get next free block
-		printf("No free blocks available\n");
-	return -1;
-	}
-	
-	inode * i = inode_create(0, geteuid(), getegid(), mode);
-	clock_gettime(CLOCK_REALTIME, &(i->create_time));
-	clock_gettime(CLOCK_REALTIME, &(i->access_time));
-	clock_gettime(CLOCK_REALTIME, &(i->modify_time));
-	i->direct[0] = v->free;
-	i->single_indirect = blocknum_create(0, 0);
-	i->double_indirect = blocknum_create(0, 0);
-	bufdwrite(writenum, (char *) i, sizeof(inode));
-
-	getNextFree(v);
-
-	// update vcb
-	bufdwrite(0, (char *) v, sizeof(vcb));
-
-	// write new file info to directory
-
-	// free all the stuff
-	dnode_free(d);
-	dirent_free(de);
-	inode_free(i);
-
-	return 0;
-        */
 }
 
 /*
