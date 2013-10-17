@@ -445,6 +445,14 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
         blocknum * dbs = d->direct;
         inode * i_new = inode_create(0, geteuid(), getegid(), mode);
 
+        // create new inode metadata block, WITHOUT DATA block to go with it
+        clock_gettime(CLOCK_REALTIME, &(i_new->create_time));
+        clock_gettime(CLOCK_REALTIME, &(i_new->access_time));
+        clock_gettime(CLOCK_REALTIME, &(i_new->modify_time));
+        i_new->direct[0] = blocknum_create(0, 0);
+        i_new->single_indirect = blocknum_create(0, 0);
+        i_new->double_indirect = blocknum_create(0, 0);
+
         while (inode_block == -1) { // while we havent found a dirent for the inode
                 if (ent_b < dirents) { // if we have more dirents to look through
                         if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
@@ -469,17 +477,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                 de_new->entries[0].block = blocknum_create(getNextFree(v), 1);
                                 // write dirent
                                 bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
-                                // create new inode metadata block, WITHOUT DATA block to go with it
-                                clock_gettime(CLOCK_REALTIME, &(i_new->create_time));
-                                clock_gettime(CLOCK_REALTIME, &(i_new->access_time));
-                                clock_gettime(CLOCK_REALTIME, &(i_new->modify_time));
-                                i_new->direct[0] = blocknum_create(0, 0);
-                                i_new->single_indirect = blocknum_create(0, 0);
-                                i_new->double_indirect = blocknum_create(0, 0);
-                                // write inode
-                                bufdwrite(de_new->entries[0].block.block, (char *) i_new, sizeof(inode));
                                 inode_block = de_new->entries[0].block.block; // set inode blocknum 
-
                         }
                         ent_b++; 
                 }
@@ -564,12 +562,13 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                 ent_b--;
         }
         
+        bufdwrite(inode_block, (char *) i_new, sizeof(inode));
+
         d->size += 1;
         // WRITE DBS dependent on lvl holy fk
         switch (lvl) {
                 case 0:
                         d->direct[ent_b] = dbs[ent_b];
-                        bufdwrite(inode_block, (char *) i_new, sizeof(inode));
                         bufdwrite(dirBlock.block, (char *) d, sizeof(dnode)); 
                         break;
                 case 1:
