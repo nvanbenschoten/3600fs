@@ -569,6 +569,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
         switch (lvl) {
                 case 0:
                         d->direct[ent_b] = dbs[ent_b];
+                        bufdwrite(inode_block, (char *) i_new, sizeof(inode));
                         bufdwrite(dirBlock.block, (char *) d, sizeof(dnode)); 
                         break;
                 case 1:
