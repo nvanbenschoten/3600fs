@@ -323,10 +323,10 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
 		while(count < 128*128*16+128*16+110*16) {
 			
-			if (firstind->blocks[(count-110*16-128*16)/128].valid) {
+			if (firstind->blocks[(count-110*16-128*16)/(16*128)].valid) {
 
 				indirect *secind = indirect_create();
-				bufdread(firstind->blocks[(count-110*16-128*16)/128].block, (char *)secind, sizeof(indirect));
+				bufdread(firstind->blocks[(count-110*16-128*16)/(16*128)].block, (char *)secind, sizeof(indirect));
 
 				int k;
 				for (k = (count-110*16-128*16)%128; k < 128; k++) {
