@@ -483,15 +483,42 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         ent_b++; 
                 }
                 else if (lvl == 0) { // we need to move to single_indirect block
-                        bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
+                        if (d->single_indirect.valid) { // blocknum is valid so can just use it
+                                bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
+                        }
+                        else { // need to actually create blocknum etc
+                                //d->single_indirect.block = create_blocknum(); 
+                                d->single_indirect = blocknum_create(getNextFree(v), 1);
+                                indr->blocks[0] = blocknum_create(0, 0);
+                        }
                         ent_b = 0;
                         dirents = 128;
                         dbs = indr->blocks;
                         lvl++;
                 }
                 else if (lvl == 1) { // we need to move to double_indirect block
-                        bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+                        if (d->double_indirect.valid) { // if blocknum valid
+                                bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect)); // can use it
+                                // TODO can probably also merge lvl 2 to here if clever
+                                if (indr2->blocks[0].valid) { // if 2nd level valid
+                                        bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+                                }
+                                else { // need to update both levels
+                                        indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                                        free(indr);
+                                        indr = indirect_create();
+                                        indr->blocks[0] = blocknum_create(0, 0);
+                                        bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+                                }
+                        }
+                        else { // not valid so need to setup 1st and 2nd levels
+                                d->double_indirect = blocknum_create(getNextFree(v), 1);
+                                indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                                free(indr);
+                                indr = indirect_create();
+                                indr->blocks[0] = blocknum_create(0, 0);
+                                bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+                        }
                         ent_b = 0;
                         j = 0;
                         dirents = 128;
@@ -501,7 +528,16 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                 else if (lvl == 2) {
                         j++;
                         if (j != 128) {
-                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                if (indr2->blocks[j].valid) {
+                                        bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                }
+                                else { // need to setup blank indr
+                                        indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                        free(indr);
+                                        indr = indirect_create();
+                                        indr->blocks[0] = blocknum_create(0, 0);
+                                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                }
                                 ent_b = 0;
                                 dirents = 128;
                                 dbs = indr->blocks;
@@ -536,11 +572,14 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         break;
                 case 1:
                         indr->blocks[ent_b] = dbs[ent_b];
+                        bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
                         bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
                         break;
 
                 case 2: // j could be off by 1, but i dont think it is atm
                         indr->blocks[ent_b] = dbs[ent_b];
+                        bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
+                        bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
                         bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                         break;
                 // case 3 is probably not necessary as if lvl = 3
