@@ -930,11 +930,11 @@ static int vfs_rename(const char *from, const char *to)
 		return -1;
 	}
 
-	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	char *pathcpy = (char *)calloc(strlen(from) + 1, sizeof(char));
 	assert(pathcpy != NULL);
-	strcpy(pathcpy, path);
+	strcpy(pathcpy, from);
 
-	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	char *name = (char *)calloc(strlen(from) + 1, sizeof(char));
 	assert(name != NULL);
 
 	// Seperating the directory name from the file/directory name
@@ -942,6 +942,34 @@ static int vfs_rename(const char *from, const char *to)
 		printf("Error seperating the path and filename\n");
 		free(pathcpy);
 		free(name);
+		return -1;
+	}
+
+	// Seperating for the to
+	char *pathcpy2 = (char *)calloc(strlen(to) + 1, sizeof(char));
+	assert(pathcpy2 != NULL);
+	strcpy(pathcpy2, to);
+
+	char *newName = (char *)calloc(strlen(to) + 1, sizeof(char));
+	assert(newName != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy2, newName)) {
+		printf("Error seperating the path and filename\n");
+		free(pathcpy);
+		free(name);
+		free(pathcpy2);
+		free(newName);
+		return -1;
+	}
+
+	// Make sure paths are the same
+	if (strcmp(pathcpy, pathcpy2)) {
+		printf("Error paths of old and new file names not the same\n");
+		free(pathcpy);
+		free(name);
+		free(pathcpy2);
+		free(newName);
 		return -1;
 	}
 
@@ -959,6 +987,8 @@ static int vfs_rename(const char *from, const char *to)
 			free(pathcpy);
 			free(name);
 			dnode_free(d);
+			free(pathcpy2);
+			free(newName);
 			return -1;
 		}
 	}
@@ -967,7 +997,7 @@ static int vfs_rename(const char *from, const char *to)
 	inode *matchi = inode_create(0, 0, 0, 0);
 	
 	blocknum block;
-	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 1, to);
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 1, newName);
 	
 	// Free malloced variables
 	dnode_free(d);
@@ -975,6 +1005,8 @@ static int vfs_rename(const char *from, const char *to)
 	inode_free(matchi);
 	free(pathcpy);
 	free(name);
+	free(pathcpy2);
+	free(newName);
 
 	if (ret < 0) {
 		return -ENOENT;
@@ -1512,7 +1544,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 // -1 for not found
 // 0 for directory
 // 1 for file
-int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag, int directoryBlock, int renameFlag, const char *newName) {
+int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag, int directoryBlock, int renameFlag, char *newName) {
 	*retBlock = blocknum_create(0, 0);
 
 	direntry dir;
