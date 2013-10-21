@@ -1512,7 +1512,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 // -1 for not found
 // 0 for directory
 // 1 for file
-int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag, int directoryBlock, int renameFlag, char *newName) {
+int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag, int directoryBlock, int renameFlag, const char *newName) {
 	*retBlock = blocknum_create(0, 0);
 
 	direntry dir;
