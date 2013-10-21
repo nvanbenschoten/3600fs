@@ -926,11 +926,6 @@ static int vfs_rename(const char *from, const char *to)
 {
 	vfs_delete(to);
 
-	if (strlen(to) > 26) {
-		printf("Error new filename too long\n");
-		return -1;
-	}
-
 	char *pathcpy = (char *)calloc(strlen(from) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, from);
@@ -992,6 +987,11 @@ static int vfs_rename(const char *from, const char *to)
 			free(newName);
 			return -1;
 		}
+	}
+
+	if (strlen(newName) > 26) {
+		printf("Error new filename too long\n");
+		return -1;
 	}
 
 	dnode *matchd = dnode_create(0, 0, 0, 0);
