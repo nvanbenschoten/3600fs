@@ -116,6 +116,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	// Seperating the directory name from the file/directory name
 	if (seperatePathAndName(pathcpy, name)) {
 		printf("Error seperating the path and filename\n");
+		free(pathcpy);
+		free(name);
 		return -1;
 	}
 
@@ -130,6 +132,9 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		if(findDNODE(d, pathcpy, &dirBlock)) {
 			// If directory could not be found
 			printf("Could not find directory\n");
+			dnode_free(d);
+			free(pathcpy);
+			free(name);
 			return -1;
 		}
 	}
@@ -143,11 +148,16 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	inode *matchi = inode_create(0, 0, 0, 0);
 	
 	blocknum block;
-	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0);
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
 
 	// Check to see if match is valid
 	if (ret < 0) {
+		dnode_free(d);
+		dnode_free(matchd);
+		inode_free(matchi);
+		free(pathcpy);
+		free(name);
 		return -ENOENT;
 	}
 	else if (ret == 0) {
@@ -175,6 +185,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	dnode_free(matchd);
 	inode_free(matchi);
+	free(pathcpy);
+	free(name);
 
 	return 0;
 }
@@ -241,6 +253,8 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		if(findDNODE(d, pathcpy, &block)) {
 			// If ditectory could not be found
 			printf("Could not find directory\n");
+			dnode_free(d);
+			free(pathcpy);
 			return -1;
 		}
 	}
@@ -264,6 +278,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 					if(filler(buf, de->entries[j].name, NULL, count)) {
 						dirent_free(de);
 						dnode_free(d);
+						free(pathcpy);
 						return 0;
 					}
 				}
@@ -298,6 +313,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 							indirect_free(ind);
 							dirent_free(de);
 							dnode_free(d);
+							free(pathcpy);
 							return 0;
 						}
 					}
@@ -348,6 +364,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 									indirect_free(secind);
 									dirent_free(de);
 									dnode_free(d);
+									free(pathcpy);
 									return 0;
 								}
 							}
@@ -373,6 +390,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	}
 
 	dnode_free(d);
+	free(pathcpy);
 
 	return 0;
 }
@@ -396,6 +414,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	// Seperating the directory name from the file/directory name
 	if (seperatePathAndName(pathcpy, name)) {
 		printf("Error seperating the path and filename\n");
+		free(pathcpy);
+		free(name);
 		return -1;
 	}
 
@@ -410,6 +430,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		if(findDNODE(d, pathcpy, &dirBlock)) {
 			// If ditectory could not be found
 			printf("Could not find directory\n");
+			dnode_free(d);
+			free(pathcpy);
+			free(name);
 			return -1;
 		}
 	}
@@ -418,7 +441,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	dnode * temp_d = dnode_create(0, 0, 0, 0);
 	inode * temp_i = inode_create(0, 0, 0, 0);
 	blocknum block;
-	int ret = getNODE(d, name, temp_d, temp_i, &block, 0, 0);
+	int ret = getNODE(d, name, temp_d, temp_i, &block, 0, 0, 0, "");
 	if (ret >= 0) {
 		// COMMENT Made it so it file or dir match, it returns
 		dnode_free(d);
@@ -555,6 +578,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         free(i_new);
                         // error
                         printf("Error no directory entry available to create file.\n");
+                        free(pathcpy);
+						free(name);
                         return -1;
                 }
         }
@@ -599,6 +624,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	free(de);
 	free(de_new);
 	free(i_new);
+	free(pathcpy);
+	free(name);
 		
 	return 0;
 }
@@ -630,6 +657,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 	// Seperating the directory name from the file/directory name
 	if (seperatePathAndName(pathcpy, name)) {
 			printf("Error seperating the path and filename\n");
+			free(pathcpy);
+			free(name);
 			return -1;
 	}
 
@@ -645,6 +674,9 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 			if(findDNODE(d, pathcpy, &dirBlock)) {
 					// If directory could not be found
 					printf("Could not find directory\n");
+					dnode_free(d);
+					free(pathcpy);
+					free(name);
 					return -1;
 			}
 	}
@@ -652,7 +684,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 	inode *i_node = inode_create(0, 0, 0, 0);
 	dnode *d_temp = dnode_create(0, 0, 0, 0);
 	blocknum block;
-	int ret = getNODE(d, name, d_temp, i_node, &block, 1, dirBlock.block);
+	int ret = getNODE(d, name, d_temp, i_node, &block, 0, 0, 0, "");
 	if (ret != 1) { // if didnt find matching file node
 		// what does findNODE return if both match??
 		inode_free(i_node);
@@ -763,6 +795,8 @@ static int vfs_delete(const char *path)
 	// Seperating the directory name from the file/directory name
 	if (seperatePathAndName(pathcpy, name)) {
 			printf("Error seperating the path and filename\n");
+			free(pathcpy);
+			free(name);
 			return -1;
 	}
 
@@ -778,6 +812,9 @@ static int vfs_delete(const char *path)
 			if(findDNODE(d, pathcpy, &dirBlock)) {
 					// If directory could not be found
 					printf("Could not find directory\n");
+					dnode_free(d);
+					free(pathcpy);
+					free(name);
 					return -1;
 			}
 	}
@@ -786,7 +823,7 @@ static int vfs_delete(const char *path)
 	dnode *d_temp = dnode_create(0, 0, 0, 0);
 	blocknum block;
 	// References to inodes are deleted in getNODE function!
-	int ret = getNODE(d, name, d_temp, i_node, &block, 1, dirBlock.block);
+	int ret = getNODE(d, name, d_temp, i_node, &block, 1, dirBlock.block, 0, "");
 	if (ret != 1) { // if didnt find matching file node
 		// what does findNODE return if both match??
 		inode_free(i_node);
@@ -888,6 +925,60 @@ static int vfs_delete(const char *path)
  */
 static int vfs_rename(const char *from, const char *to)
 {
+	if (strlen(to) > 26) {
+		printf("Error new filename too long\n");
+		return -1;
+	}
+
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
+
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+		printf("Error seperating the path and filename\n");
+		free(pathcpy);
+		free(name);
+		return -1;
+	}
+
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
+
+	if (strcmp(pathcpy, "/")) {
+		// If path isnt the root directory
+		// Transforms d to the correct directory
+		if(findDNODE(d, pathcpy, &dirBlock)) {
+			// If directory could not be found
+			printf("Could not find directory\n");
+			free(pathcpy);
+			free(name);
+			dnode_free(d);
+			return -1;
+		}
+	}
+
+	dnode *matchd = dnode_create(0, 0, 0, 0);
+	inode *matchi = inode_create(0, 0, 0, 0);
+	
+	blocknum block;
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 1, to);
+	
+	// Free malloced variables
+	dnode_free(d);
+	dnode_free(matchd);
+	inode_free(matchi);
+	free(pathcpy);
+	free(name);
+
+	if (ret < 0) {
+		return -ENOENT;
+	}
 
 	return 0;
 }
@@ -915,6 +1006,8 @@ static int vfs_chmod(const char *path, mode_t mode)
 	// Seperating the directory name from the file/directory name
 	if (seperatePathAndName(pathcpy, name)) {
 		printf("Error seperating the path and filename\n");
+		free(pathcpy);
+		free(name);
 		return -1;
 	}
 
@@ -929,6 +1022,9 @@ static int vfs_chmod(const char *path, mode_t mode)
 		if(findDNODE(d, pathcpy, &dirBlock)) {
 			// If directory could not be found
 			printf("Could not find directory\n");
+			dnode_free(d);
+			free(pathcpy);
+			free(name);
 			return -1;
 		}
 	}
@@ -942,12 +1038,16 @@ static int vfs_chmod(const char *path, mode_t mode)
 	inode *matchi = inode_create(0, 0, 0, 0);
 	
 	blocknum block;
-	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0);
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
+	free(pathcpy);
+	free(name);
 
 	// Check to see if match is valid
 	if (ret < 0) {
 		printf("Could not find file\n");
+		dnode_free(matchd);
+		inode_free(matchi);
 		return -1;
 	}
 	else if (ret == 0) {
@@ -983,6 +1083,8 @@ static int vfs_chown(const char *path, uid_t uid, gid_t gid)
 
 	// Seperating the directory name from the file/directory name
 	if (seperatePathAndName(pathcpy, name)) {
+		free(pathcpy);
+		free(name);
 		printf("Error seperating the path and filename\n");
 		return -1;
 	}
@@ -998,6 +1100,9 @@ static int vfs_chown(const char *path, uid_t uid, gid_t gid)
 		if(findDNODE(d, pathcpy, &dirBlock)) {
 			// If directory could not be found
 			printf("Could not find directory\n");
+			free(pathcpy);
+			free(name);
+			dnode_free(d);
 			return -1;
 		}
 	}
@@ -1011,12 +1116,16 @@ static int vfs_chown(const char *path, uid_t uid, gid_t gid)
 	inode *matchi = inode_create(0, 0, 0, 0);
 	
 	blocknum block;
-	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0);
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
+	free(pathcpy);
+	free(name);
 
 	// Check to see if match is valid
 	if (ret < 0) {
 		printf("Could not find file\n");
+		dnode_free(matchd);
+		inode_free(matchi);
 		return -1;
 	}
 	else if (ret == 0) {
@@ -1053,6 +1162,8 @@ static int vfs_utimens(const char *path, const struct timespec ts[2])
 
 	// Seperating the directory name from the file/directory name
 	if (seperatePathAndName(pathcpy, name)) {
+		free(pathcpy);
+		free(name);
 		printf("Error seperating the path and filename\n");
 		return -1;
 	}
@@ -1068,6 +1179,9 @@ static int vfs_utimens(const char *path, const struct timespec ts[2])
 		if(findDNODE(d, pathcpy, &dirBlock)) {
 			// If directory could not be found
 			printf("Could not find directory\n");
+			free(pathcpy);
+			free(name);
+			dnode_free(d);
 			return -1;
 		}
 	}
@@ -1081,12 +1195,16 @@ static int vfs_utimens(const char *path, const struct timespec ts[2])
 	inode *matchi = inode_create(0, 0, 0, 0);
 	
 	blocknum block;
-	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0);
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
+	free(pathcpy);
+	free(name);
 
 	// Check to see if match is valid
 	if (ret < 0) {
 		printf("Could not find file\n");
+		dnode_free(matchd);
+		inode_free(matchi);
 		return -1;
 	}
 	else if (ret == 0) {
@@ -1394,7 +1512,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 // -1 for not found
 // 0 for directory
 // 1 for file
-int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag, int directoryBlock) {
+int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *retBlock, int deleteFlag, int directoryBlock, int renameFlag, char *newName) {
 	*retBlock = blocknum_create(0, 0);
 
 	direntry dir;
@@ -1456,6 +1574,10 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 							directory->size--;
 							bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
+						}
+						else if (renameFlag) {
+							strcpy(de->entries[j].name, newName);
+							bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
 						}
 
 						dirent_free(de);
@@ -1557,6 +1679,10 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 								directory->size--;
 								bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
+							}
+							else if (renameFlag) {
+								strcpy(de->entries[j].name, newName);
+								bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
 							}
 
 							dirent_free(de);
@@ -1690,6 +1816,10 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 
 										directory->size--;
 										bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
+									}
+									else if (renameFlag) {
+										strcpy(de->entries[j].name, newName);
+										bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
 									}
 
 									dirent_free(de);
