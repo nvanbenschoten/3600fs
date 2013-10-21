@@ -153,7 +153,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	// Check to see if match is valid
 	if (ret < 0) {
-		dnode_free(d);
 		dnode_free(matchd);
 		inode_free(matchi);
 		free(pathcpy);
