@@ -924,6 +924,8 @@ static int vfs_delete(const char *path)
  */
 static int vfs_rename(const char *from, const char *to)
 {
+	vfs_delete(to);
+
 	if (strlen(to) > 26) {
 		printf("Error new filename too long\n");
 		return -1;
