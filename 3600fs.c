@@ -337,19 +337,22 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		indirect *firstind = indirect_create();
 		bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
 		while(count < 128*128*16+128*16+110*16) {
+			// While below all limit of direct, first indirect, and second indirect
 			
 			if (firstind->blocks[(count-110*16-128*16)/(16*128)].valid) {
+				// If first indirect is valid
 
+				// Read in second indirect
 				indirect *secind = indirect_create();
 				bufdread(firstind->blocks[(count-110*16-128*16)/(16*128)].block, (char *)secind, sizeof(indirect));
 
 				int k;
-				for (k = (count-110*16-128*16)%128; k < 128; k++) {
+				for (k = (count-110*16-128*16)/128; k < 128; k++) {
 
-					if (secind->blocks[(count-110*16-128*16-k*16)/16].valid) {
+					if (secind->blocks[k].valid) {
 
 						dirent *de = dirent_create();
-						bufdread(secind->blocks[(count-110*16-128*16-k*16)/16].block, (char *)de, sizeof(dirent));
+						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
 						for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
