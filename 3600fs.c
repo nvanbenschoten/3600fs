@@ -223,7 +223,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 
 	printf("%s %s\n", pathcpy, name);
 
-	Read vcb
+	//Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
 	blocknum dirBlock = blocknum_create(v->root.block, 1);
