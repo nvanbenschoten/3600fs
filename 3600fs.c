@@ -200,7 +200,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  */
 
 static int vfs_mkdir(const char *path, mode_t mode) {
-	printf("%s\n", path);
 
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
@@ -288,7 +287,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                                     if (!de->entries[i].block.valid) { // if any of the entries are invalid
                                             // meaning we can use them to write to
                                             strcpy(de->entries[i].name, name); // write to them
-                                            de->entries[i].type = 1; // 1 = file
+                                            de->entries[i].type = 0; // 0 = dir
                                             de->entries[i].block = blocknum_create(getNextFree(v), 1);
                                             dnode_block = de->entries[i].block.block; // set inode
                                             bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
