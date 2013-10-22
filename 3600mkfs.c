@@ -23,7 +23,7 @@ void myformat(int size) {
     // set vcb data and write to disk
     char * n = DISKFILE;
     vcb * v = vcb_create(DISKNUMBER, n);
-    v->root = blocknum_create(1,1);
+    v->root = blocknum_create(1, 1);
     v->free = blocknum_create(3, 1);
 
     // Write to disk
