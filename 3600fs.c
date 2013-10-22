@@ -1321,7 +1321,7 @@ static int vfs_truncate(const char *file, off_t offset)
  * NOTE: If you're supporting multiple directories for extra credit,
  * you should add 
  *
- *     .mkdir	 = vfs_mkdir,
+ *     
  */
 static struct fuse_operations vfs_oper = {
 	.init    = vfs_mount,
@@ -1337,6 +1337,7 @@ static struct fuse_operations vfs_oper = {
 	.chown	 = vfs_chown,
 	.utimens	 = vfs_utimens,
 	.truncate	 = vfs_truncate,
+	.mkdir	 = vfs_mkdir,
 };
 
 int main(int argc, char *argv[]) {
