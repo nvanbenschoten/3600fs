@@ -198,14 +198,52 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  * HINT: Don't forget to create . and .. while creating a
  * directory.
  */
-/*
- * NOTE: YOU CAN IGNORE THIS METHOD, UNLESS YOU ARE COMPLETING THE 
- *       EXTRA CREDIT PORTION OF THE PROJECT.  IF SO, YOU SHOULD
- *       UN-COMMENT THIS METHOD.
-static int vfs_mkdir(const char *path, mode_t mode) {
 
-  return -1;
-} */
+static int vfs_mkdir(const char *path, mode_t mode) {
+	printf("%s\n", path);
+
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
+
+	// Handle last char being a slash
+	if (pathcpy[strlen(pathcpy) - 1] == '/')
+		pathcpy[strlen(pathcpy) - 1] = '\0';
+
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+		printf("Error seperating the path and filename\n");
+		free(pathcpy);
+		free(name);
+		return -1;
+	}
+
+	printf("%s %s\n", pathcpy, name);
+
+	// Read vcb
+	// dnode *d = dnode_create(0, 0, 0, 0);
+	// bufdread(v->root.block, (char *)d, sizeof(dnode));
+	// blocknum dirBlock = blocknum_create(v->root.block, 1);
+
+	// if (strcmp(pathcpy, "/")) {
+	// 	// If path isnt the root directory
+	// 	// Transforms d to the correct directory
+	// 	if(findDNODE(d, pathcpy, &dirBlock)) {
+	// 		// If directory could not be found
+	// 		printf("Could not find directory\n");
+	// 		dnode_free(d);
+	// 		free(pathcpy);
+	// 		free(name);
+	// 		return -1;
+	// 	}
+	// }
+
+
+  	return 0;
+}
 
 /** Read directory
  *
