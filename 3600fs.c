@@ -355,7 +355,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
-						for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
+						for (j = (count-110*16-128*16)%16; j < 16; j++) {
 							// j = direntry entry
 							//printf("Double Indirect nodes %i : %i : %i\n", count, k, j);
 							count++;
