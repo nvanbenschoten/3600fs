@@ -299,7 +299,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                             // set to valid and make it an actual blocknum cause no guarantees
                             dbs[ent_b] = blocknum_create(getNextFree(v), 1); // write new blocknum as valid
                             strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
-                            de_new->entries[0].type = 1;
+                            de_new->entries[0].type = 0;
                             de_new->entries[0].block = blocknum_create(getNextFree(v), 1);
                             // write dirent
                             bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
