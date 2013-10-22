@@ -394,12 +394,12 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 
     // New directory dirent
     d->direct[0] = blocknum_create(getNextFree(v), 1);
-    dirent * de = dirent_create();
-    de->entries[0] = direntry_create(".", 0, blocknum_create(dnode_block, 1));
-    de->entries[1] = direntry_create("..", 0, blocknum_create(dirBlock.block, 1));
+    dirent * de_in = dirent_create();
+    de_in->entries[0] = direntry_create(".", 0, blocknum_create(dnode_block, 1));
+    de_in->entries[1] = direntry_create("..", 0, blocknum_create(dirBlock.block, 1));
 
-    bufdwrite(d->direct[0].block, (char *)de, sizeof(dirent));
-    dirent_free(de);
+    bufdwrite(d->direct[0].block, (char *)de_in, sizeof(dirent));
+    dirent_free(de_in);
 
     bufdwrite(dnode_block, (char *) d_new, sizeof(dnode));
 
