@@ -486,7 +486,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                                 de->entries[i].type = 1; // 1 = file
                                                 de->entries[i].block = blocknum_create(getNextFree(v), 1);
                                                 inode_block = de->entries[i].block.block; // set inode
-                                                bufdwrite(d->direct[ent_b].block, (char *) de, sizeof(dirent));
+                                                bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
                                                 break;
                                         }
                                 }
