@@ -198,14 +198,251 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  * HINT: Don't forget to create . and .. while creating a
  * directory.
  */
-/*
- * NOTE: YOU CAN IGNORE THIS METHOD, UNLESS YOU ARE COMPLETING THE 
- *       EXTRA CREDIT PORTION OF THE PROJECT.  IF SO, YOU SHOULD
- *       UN-COMMENT THIS METHOD.
+
 static int vfs_mkdir(const char *path, mode_t mode) {
 
-  return -1;
-} */
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
+
+	// Handle last char being a slash
+	if (pathcpy[strlen(pathcpy) - 1] == '/')
+		pathcpy[strlen(pathcpy) - 1] = '\0';
+
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
+
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+		printf("Error seperating the path and filename\n");
+		free(pathcpy);
+		free(name);
+		return -1;
+	}
+
+	printf("%s %s\n", pathcpy, name);
+
+	//Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
+
+	if (strcmp(pathcpy, "/")) {
+		// If path isnt the root directory
+		// Transforms d to the correct directory
+		if(findDNODE(d, pathcpy, &dirBlock)) {
+			// If directory could not be found
+			printf("Could not find directory\n");
+			dnode_free(d);
+			free(pathcpy);
+			free(name);
+			return -1;
+		}
+	}
+
+	// check if file already exists
+	dnode * temp_d = dnode_create(0, 0, 0, 0);
+	inode * temp_i = inode_create(0, 0, 0, 0);
+	blocknum block;
+	int ret = getNODE(d, name, temp_d, temp_i, &block, 0, 0, 0, "");
+	if (ret >= 0) {
+		// COMMENT Made it so it file or dir match, it returns
+		dnode_free(d);
+		dnode_free(temp_d);
+		inode_free(temp_i);
+		// do pathcpy and name need to be freed?
+		free(pathcpy);
+		free(name);
+		return -EEXIST;
+	}
+	else {
+		dnode_free(temp_d);
+		inode_free(temp_i);
+	}
+        
+    // while we havent found a dirent
+    int dnode_block = -1;
+    int i = 0, j = 0, ent_b = 0, lvl = 0;
+    int dirents = 110;
+    indirect *indr = indirect_create();
+    indirect *indr2 = indirect_create();
+    dirent *de = dirent_create();
+    dirent *de_new = dirent_create();
+    blocknum * dbs = d->direct;
+    dnode * d_new = dnode_create(2, geteuid(), getegid(), mode);
+
+    // create new inode metadata block, WITHOUT DATA block to go with it
+    clock_gettime(CLOCK_REALTIME, &(d_new->create_time));
+    clock_gettime(CLOCK_REALTIME, &(d_new->access_time));
+    clock_gettime(CLOCK_REALTIME, &(d_new->modify_time));
+    d_new->direct[0] = blocknum_create(0, 0);
+    d_new->single_indirect = blocknum_create(0, 0);
+    d_new->double_indirect = blocknum_create(0, 0);
+
+    while (dnode_block == -1) { // while we havent found a dirent for the inode
+            if (ent_b < dirents) { // if we have more dirents to look through
+                    if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
+                            bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
+                            for (i = 0; i < 16; i++) { // look through the direntries
+                                    if (!de->entries[i].block.valid) { // if any of the entries are invalid
+                                            // meaning we can use them to write to
+                                            strcpy(de->entries[i].name, name); // write to them
+                                            de->entries[i].type = 0; // 0 = dir
+                                            de->entries[i].block = blocknum_create(getNextFree(v), 1);
+                                            dnode_block = de->entries[i].block.block; // set inode
+                                            bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
+                                            break;
+                                    }
+                            }
+                    }
+                    else { // we need to use this dirent for our inode
+                            // set to valid and make it an actual blocknum cause no guarantees
+                            dbs[ent_b] = blocknum_create(getNextFree(v), 1); // write new blocknum as valid
+                            strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
+                            de_new->entries[0].type = 0;
+                            de_new->entries[0].block = blocknum_create(getNextFree(v), 1);
+                            // write dirent
+                            bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
+                            dnode_block = de_new->entries[0].block.block; // set inode blocknum 
+                    }
+                    ent_b++; 
+            }
+            else if (lvl == 0) { // we need to move to single_indirect block
+                    if (d->single_indirect.valid) { // blocknum is valid so can just use it
+                            bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
+                    }
+                    else { // need to actually create blocknum etc
+                            //d->single_indirect.block = create_blocknum(); 
+                            d->single_indirect = blocknum_create(getNextFree(v), 1);
+                            indr->blocks[0] = blocknum_create(0, 0);
+                    }
+                    ent_b = 0;
+                    dirents = 128;
+                    dbs = indr->blocks;
+                    lvl++;
+            }
+            else if (lvl == 1) { // we need to move to double_indirect block
+                    if (d->double_indirect.valid) { // if blocknum valid
+                            bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect)); // can use it
+                            // TODO can probably also merge lvl 2 to here if clever
+                            if (indr2->blocks[0].valid) { // if 2nd level valid
+                                    bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+                            }
+                            else { // need to update both levels
+                                    indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                                    free(indr);
+                                    indr = indirect_create();
+                                    indr->blocks[0] = blocknum_create(0, 0);
+                                    bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+                            }
+                    }
+                    else { // not valid so need to setup 1st and 2nd levels
+                            d->double_indirect = blocknum_create(getNextFree(v), 1);
+                            indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                            free(indr);
+                            indr = indirect_create();
+                            indr->blocks[0] = blocknum_create(0, 0);
+                            bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+                    }
+                    ent_b = 0;
+                    j = 0;
+                    dirents = 128;
+                    dbs = indr->blocks;
+                    lvl++;
+            }
+            else if (lvl == 2) {
+                    j++;
+                    if (j != 128) {
+                            if (indr2->blocks[j].valid) {
+                                    bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                            }
+                            else { // need to setup blank indr
+                                    indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                    free(indr);
+                                    indr = indirect_create();
+                                    indr->blocks[0] = blocknum_create(0, 0);
+                                    bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                            }
+                            ent_b = 0;
+                            dirents = 128;
+                            dbs = indr->blocks;
+                    }
+                    else {
+                            lvl++;
+                    }
+            }
+            else { // we need to return an error because there is no more room for dirents
+                    // free stuff
+                    free(d);
+                    free(indr);
+                    free(indr2);
+                    free(de);
+                    free(de_new);
+                    free(d_new);
+                    // error
+                    printf("Error no directory entry available to create file.\n");
+                    free(pathcpy);
+					free(name);
+                    return -1;
+            }
+    }
+    if (ent_b != 0) { // if we changed ent_b its off by one for final dbs comparison 
+            ent_b--;
+    }
+    
+
+    // New directory dirent
+    d_new->direct[0] = blocknum_create(getNextFree(v), 1);
+    dirent * de_in = dirent_create();
+    de_in->entries[0] = direntry_create(".", 0, blocknum_create(dnode_block, 1));
+    de_in->entries[1] = direntry_create("..", 0, blocknum_create(dirBlock.block, 1));
+
+    bufdwrite(d_new->direct[0].block, (char *)de_in, sizeof(dirent));
+    dirent_free(de_in);
+
+    bufdwrite(dnode_block, (char *) d_new, sizeof(dnode));
+
+    d->size += 1;
+    // WRITE DBS dependent on lvl holy fk
+    switch (lvl) {
+            case 0:
+                    d->direct[ent_b] = dbs[ent_b];
+                    bufdwrite(dirBlock.block, (char *) d, sizeof(dnode)); 
+                    break;
+            case 1:
+                    indr->blocks[ent_b] = dbs[ent_b];
+                    bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
+                    bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
+                    break;
+
+            case 2: // j could be off by 1, but i dont think it is atm
+                    indr->blocks[ent_b] = dbs[ent_b];
+                    bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
+                    bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+                    bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                    break;
+            // case 3 is probably not necessary as if lvl = 3
+            // it means there was no space so should have returned with error already
+            //case 3:
+
+            //        break;
+    }
+	// update vcb
+	bufdwrite(0, (char *) v, sizeof(vcb));
+
+	// then free stuff and return
+	free(d);
+	free(indr);
+	free(indr2);
+	free(de);
+	free(de_new);
+	free(d_new);
+	free(pathcpy);
+	free(name);
+
+
+  	return 0;
+}
 
 /** Read directory
  *
@@ -337,22 +574,26 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		indirect *firstind = indirect_create();
 		bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
 		while(count < 128*128*16+128*16+110*16) {
+			// While below limit of direct, first indirect, and second indirect
 			
 			if (firstind->blocks[(count-110*16-128*16)/(16*128)].valid) {
+				// If first indirect is valid
 
+				// Read in second indirect
 				indirect *secind = indirect_create();
 				bufdread(firstind->blocks[(count-110*16-128*16)/(16*128)].block, (char *)secind, sizeof(indirect));
 
 				int k;
-				for (k = (count-110*16-128*16)%128; k < 128; k++) {
+				for (k = (count-110*16-128*16)/16; k < 128; k++) {
+					// K is equal to the index in the second indirect block
 
-					if (secind->blocks[(count-110*16-128*16-k*128)/16].valid) {
+					if (secind->blocks[k].valid) {
 
 						dirent *de = dirent_create();
-						bufdread(secind->blocks[(count-110*16-128*16-k*128)/16].block, (char *)de, sizeof(dirent));
+						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
-						for (j = (count-110*16-128*16-k*128)%16; j < 16; j++) {
+						for (j = (count-110*16-128*16)%16; j < 16; j++) {
 							// j = direntry entry
 							//printf("Double Indirect nodes %i : %i : %i\n", count, k, j);
 							count++;
@@ -1429,7 +1670,7 @@ static int vfs_truncate(const char *file, off_t offset)
  * NOTE: If you're supporting multiple directories for extra credit,
  * you should add 
  *
- *     .mkdir	 = vfs_mkdir,
+ *     
  */
 static struct fuse_operations vfs_oper = {
 	.init    = vfs_mount,
@@ -1445,6 +1686,7 @@ static struct fuse_operations vfs_oper = {
 	.chown	 = vfs_chown,
 	.utimens	 = vfs_utimens,
 	.truncate	 = vfs_truncate,
+	.mkdir	 = vfs_mkdir,
 };
 
 int main(int argc, char *argv[]) {
@@ -2052,7 +2294,7 @@ int getNextFree(vcb *v) {
 }
 
 
-// TODO Document
+// Frees the block and adds it to the front of the vcb's free list
 int releaseFree(vcb *v, blocknum block) {
 	freeblock *f = freeblock_create(v->free);
 	bufdwrite(block.block, (char *) f, sizeof(freeblock));
