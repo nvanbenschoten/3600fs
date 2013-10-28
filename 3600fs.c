@@ -436,12 +436,12 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 	bufdwrite(0, (char *) v, sizeof(vcb));
 
 	// then free stuff and return
-	free(d);
-	free(indr);
-	free(indr2);
-	free(de);
-	free(de_new);
-	free(d_new);
+	dnode_free(d);
+	indirect_free(indr);
+	indirect_free(indr2);
+	dirent_free(de);
+	dirent_free(de_new);
+	dnode_free(d_new);
 	free(pathcpy);
 	free(name);
 
@@ -891,8 +891,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 					struct fuse_file_info *fi)
 {
-	UNUSED(fi);
-
+        UNUSED(fi);
 	// Move down path
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
@@ -946,7 +945,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 		dnode_free(d);
 		free(name);
 		free(pathcpy);
-		printf("Could not find file to delete or file is a directory");
+		printf("Could not find file to read or file is a directory");
 		return -1;
 	}
 
@@ -1030,6 +1029,13 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                 }
         }
         else { // Error 
+                inode_free(i_node);
+                dnode_free(d);
+                dnode_free(d_temp);
+                indirect_free(indr);
+                indirect_free(indr2);
+                free(name);
+                free(pathcpy);
                 printf("Error: File offset too large\n");
                 return -1; 
         }
@@ -1172,11 +1178,318 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 static int vfs_write(const char *path, const char *buf, size_t size,
 					 off_t offset, struct fuse_file_info *fi)
 {
+        UNUSED(fi);
+	// Move down path
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
 
-	/* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
-		MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
 
-	return 0;
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+			printf("Error seperating the path and filename\n");
+			free(pathcpy);
+			free(name);
+			return -1;
+	}
+
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
+
+	if (strcmp(path, "")) {
+			// If path isnt the root directory
+			// Transforms d to the correct directory
+			if(findDNODE(d, pathcpy, &dirBlock)) {
+					// If directory could not be found
+					printf("Could not find directory\n");
+					dnode_free(d);
+					free(pathcpy);
+					free(name);
+					return -1;
+			}
+	}
+
+	inode *i_node = inode_create(0, 0, 0, 0);
+	dnode *d_temp = dnode_create(0, 0, 0, 0);
+	blocknum block; // TODO: make sure flags below are okay
+	int ret = getNODE(d, name, d_temp, i_node, &block, 0, 0, 0, "");
+	if (ret != 1) { // if didnt find matching file node
+		// what does findNODE return if both match??
+		inode_free(i_node);
+		dnode_free(d_temp);
+		dnode_free(d);
+		free(name);
+		free(pathcpy);
+		printf("Could not find file to write to or file is a directory");
+		return -1;
+	}
+
+        // Actual unique write code starts here
+
+        unsigned int written = 0;
+	int blocks = ((int)offset)/sizeof(db); // calculate num blocks to look in
+	int block_offset = ((int)offset) % sizeof(db); // calculate offset into 
+	char tmp[sizeof(db)] = {0};
+        indirect *indr = indirect_create();
+        indirect *indr2 = indirect_create();
+        int cur_b = 0, blocks_write = 110;
+        int j = 0, lvl = 0, i = 0;
+        blocknum * dbs;
+        unsigned int usable_offset;
+
+        // calculate real offsets
+        if (offset > i_node->size) { // if our offset is past the end of our file
+                usable_offset = i_node->size; // we need to start from the end of the file instead
+                for (i = 0; i < (int)sizeof(db); i++) { // set tmp to all zeroes
+                        tmp[i] = 0;
+                }
+                blocks = (i_node->size)/sizeof(db);
+                block_offset = (i_node->size)%sizeof(db);
+        }
+        else { // otherwise we just keep the give offset
+                usable_offset = offset;
+        }
+
+        // calculate starting blocknum, set cur_b, dbs, lvl, j, etc accordingly
+        if (blocks < 110) { // in normal direct blocks
+                dbs = i_node->direct;
+                cur_b = blocks;
+        }
+        else if (blocks >= 110 && blocks < 238) { // in single indirects
+                lvl++;
+                if (i_node->single_indirect.valid) {
+                        bufdread(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
+                        dbs = indr->blocks;
+                        cur_b = blocks - 110;
+                        blocks_write = 128;
+                }
+                else { // there should never be an else?
+                        // free and return???
+                }
+        }
+        else if (blocks < 16622) { // double indirect magic numbers
+                lvl++;
+                lvl++;
+                if (i_node->double_indirect.valid) {
+                        bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+                        j = (blocks - 238) % 256;
+                        if (indr2->blocks[j].valid) {
+                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                dbs = indr->blocks;
+                                cur_b = blocks - 238 - (j * 256);
+                                blocks_write = 128;
+                        }
+                        else { // once again an else that should never happen
+                                // free and return??
+                        }
+                }
+                else { // should never happen 
+                        // free and return????
+                }
+        }
+        else {
+                // TODO should this be -ENOSPC ???
+                printf("Error: File offset too large, file size not supported\n");
+                return -1;
+        }
+
+        // write data blocks
+        while (usable_offset + written < offset + size) { // while there are still more blocks to write
+                if (cur_b < blocks_write) { // if there are more blocks to check in dbs
+                        if (dbs[cur_b].valid) { // if the current block is valid we can use it
+                                if (usable_offset < offset) { // only read in part that needs to be nonzero
+                                        //if (block_offset != 0) { // we need to read in only part of the block
+                                        bufdread(dbs[cur_b].block, (char *) tmp, block_offset);
+                                        //}
+                                }
+                                else {
+                                        bufdread(dbs[cur_b].block, (char *) tmp, sizeof(db)); // read in data block
+                                }
+                        }
+                        else { // otherwise need to get a free block to write to
+                                dbs[cur_b] = blocknum_create(getNextFree(v), 1);
+                                // TODO: check for getnextfree returning an error and handle that
+                        }
+
+                        if (usable_offset + written < offset) { // if we need to write zeroes
+                                if ((offset - (usable_offset + written)) >= (int)sizeof(db)) {
+                                // if we need to copy tmp to end of block
+                                        bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
+                                        written += sizeof(db) - block_offset;
+                                        // reset block_offset and reset tmp to all zeroes
+                                        for (i = 0; i < block_offset+1; i++) {
+                                                tmp[i] = 0;
+                                        }
+                                        block_offset = 0;
+                                }
+                                else { // otherwise just copy partially into block
+                                        //memcpy(tmp+block_offset, (char *) tmp, offset - usable_offset);
+                                        bufdwrite (dbs[cur_b].block, (char *) tmp, offset-usable_offset);
+                                        written += offset-usable_offset;
+                                        // and reset our block offset
+                                        block_offset = ((int)offset) % sizeof(db);
+                                }
+                        } 
+                        else { // can copy actual data instead
+                                if (size - written >= sizeof(db)) { // if we have to write until end of block
+                                        memcpy(tmp+block_offset, buf+written, sizeof(db)-block_offset);
+                                        bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
+                                        written += sizeof(db)-block_offset;
+                                }
+                                else { // otherwise we just copy a set number of bytes we need
+                                        memcpy(tmp+block_offset, buf+written, size-written);
+                                        bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
+                                        written += size-written;
+                                }
+                                block_offset = 0;
+                        }
+                        cur_b++;
+                }
+                else if (lvl == 0) {
+                        lvl++;
+                        // write current dbs data to inode block 
+                        for (i = 0; i < 110; i++) {
+                                i_node->direct[i] = dbs[i]; 
+                        }
+                        if (i_node->single_indirect.valid) {
+                        // if the single indirect is valid we can use it and dont have to create one
+                                bufdread(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
+                        }
+                        else { // need to set blocks and write for new indirect
+                                i_node->single_indirect = blocknum_create(getNextFree(v), 1);
+                                indr->blocks[0] = blocknum_create(0, 0);
+                                // TODO: once again check getNextFree
+                        }
+                        dbs = indr->blocks;
+                        cur_b = 0; 
+                        blocks_write = 128;
+                }
+                else if (lvl == 1) {
+                        lvl++;
+                        // write current dbs data to indirect block
+                        for (i = 0; i < 128; i++) {
+                                indr->blocks[i] = dbs[i];
+                        }
+                        bufdwrite(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
+                        // setup new level of indirection
+                        if (i_node->double_indirect.valid) {
+                                bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+                                if (indr2->blocks[j].valid) {
+                                        bufdread(indr2->blocks[j].block ,(char *) indr, sizeof(indirect));
+                                }
+                                else {
+                                        indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                        free(indr);
+                                        indr = indirect_create();
+                                        indr->blocks[j] = blocknum_create(0, 0);
+                                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                }
+                        }
+                        else {
+                                i_node->double_indirect = blocknum_create(getNextFree(v), 1);
+                                // TODO: check validity of free blocks everywhere
+                                indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                free(indr);
+                                indr = indirect_create();
+                                indr->blocks[0] = blocknum_create(0, 0);
+                                bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+                        }
+
+                        dbs = indr->blocks;
+                        cur_b = 0;
+                        blocks_write = 128;
+
+                }
+                else if (lvl == 2) {
+                        // write current dbs data to finished single indirect
+                        for (i = 0; i < 128; i++) {
+                                indr->blocks[i] = dbs[i];
+                        }
+                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+
+                        //if (j == 0) { // TODO fix this monstrosity
+                        j++;
+                        //}
+
+                        if (j < 128) {
+                                if (indr2->blocks[j].valid) { // if we have an existing single indirect to use
+                                        // TODO maybe need to free and write indr before this
+                                        bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                }
+                                else {
+                                        indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                        free(indr);
+                                        indr = indirect_create();
+                                        indr->blocks[0] = blocknum_create(0, 0);
+                                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                }
+                                cur_b = 0;
+                                blocks_write = 128;
+                                dbs = indr->blocks;
+                        }
+                        else { // NO ROOM SO CAN ERROR AND FREE OR WHATEVER
+                                lvl++;
+                        }
+                }
+                else { // no room so need to error and free etc.
+                        // write level 2 indirect block
+                        bufdwrite(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+
+                        return -ENOSPC;
+                }
+        }
+
+        i_node->size = written;
+
+        // handle final writes etc based on level of indirection
+
+        switch (lvl) {
+                case 0:
+                        // probably dont need this for loop...
+                        for (i = 0; i < 110; i++) {
+                                i_node->direct[i] = dbs[i]; 
+                        }
+
+                        bufdwrite(block.block, (char *) i_node, sizeof(inode));
+                        break;
+
+                case 1:
+                        bufdwrite(block.block, (char *) i_node, sizeof(inode));
+                        // write current dbs data to indirect block
+                        for (i = 0; i < 128; i++) {
+                                indr->blocks[i] = dbs[i];
+                        }
+                        bufdwrite(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
+
+                        break;
+
+                case 2:
+                        // write current dbs data to finished single indirect
+                        for (i = 0; i < 128; i++) {
+                                indr->blocks[i] = dbs[i];
+                        }
+                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                        bufdwrite(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+                        bufdwrite(block.block, (char *) i_node, sizeof(inode));
+
+                        break;
+        }
+
+        // free and return
+        
+        dnode_free(d);
+        inode_free(i_node);
+        indirect_free(indr);
+        indirect_free(indr2);
+        free(pathcpy);
+        free(name);
+
+	return written;
 }
 
 /**
