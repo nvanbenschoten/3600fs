@@ -2225,6 +2225,8 @@ int seperatePathAndName(char *path, char *name) {
 
 	// Null terminates each string
 	name[j] = '\0';
+	name[26] = '\0';
+
 	path[i+1] = '\0';
 
 	return 0;
