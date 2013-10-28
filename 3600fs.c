@@ -1047,7 +1047,6 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                 return -1; 
         }
 
-        // TODO check block validity, cause important if we get a read for too many bytes
         while (copied < size) {
                 // read data from valid blocks in a blocknum[]
                 if (cur_b < blocks_read) { // if we havent read all the blocks needed in the current dbs
@@ -1451,7 +1450,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                 }
         }
 
-        i_node->size = written;
+        i_node->size += written;
 
         // handle final writes etc based on level of indirection
 
