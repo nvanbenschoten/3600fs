@@ -1933,7 +1933,10 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 		}
 	} 
 
-	restOfPath[i-strlen(searchPath)-1] = '\0';
+	if (hitFirstBackslashFlag)
+		restOfPath[i-strlen(searchPath)-1] = '\0';
+	else
+		restOfPath[i-strlen(searchPath)] = '\0';
 
 	// Check in direct
 	unsigned int count = 0;
