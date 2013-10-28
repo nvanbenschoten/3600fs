@@ -1004,11 +1004,11 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                 lvl++; //  \/\/  | |  |
                 if (i_node->double_indirect.valid) {
                         bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        j = (blocks - 238) % 256;
+                        j = (blocks - 238) / 128;
                         if (indr2->blocks[j].valid) {
                                 bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                                 dbs = indr->blocks;
-                                cur_b = blocks - 238 - (j*256);
+                                cur_b = blocks - 238 - (j*128);
                                 blocks_read = 128;
                         }
                         else { // free and return
@@ -1135,11 +1135,24 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                 // if need to move within double indirect
                 else if (lvl == 2) { // srsly merge with lvl 1 and use an if
                         if (j < 128 && indr2->blocks[j].valid) {
-                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                dbs = indr->blocks;
-                                cur_b = 0;
-                                blocks_read = 128;
-                                j++;
+                                if (indr2->blocks[j].valid) {
+                                        bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                        dbs = indr->blocks;
+                                        cur_b = 0;
+                                        blocks_read = 128;
+                                        j++;
+                                }
+                                else { // free and return
+                                        inode_free(i_node);
+                                        dnode_free(d);
+                                        dnode_free(d_temp);
+                                        indirect_free(indr);
+                                        indirect_free(indr2);
+                                        free(name);
+                                        free(pathcpy);
+
+                                        return copied;
+                                }
                         }
                         else { // free + return
                                 inode_free(i_node);
@@ -1279,15 +1292,15 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                 }
         }
         else if (blocks < 16622) { // double indirect magic numbers
-                lvl++;
-                lvl++;
+                lvl++; 
+                lvl++; // lol
                 if (i_node->double_indirect.valid) {
                         bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        j = (blocks - 238) % 256;
+                        j = (blocks - 238) / 128;
                         if (indr2->blocks[j].valid) {
                                 bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                                 dbs = indr->blocks;
-                                cur_b = blocks - 238 - (j * 256);
+                                cur_b = blocks - 238 - (j * 128);
                                 blocks_write = 128;
                         }
                         else { // once again an else that should never happen
@@ -1385,24 +1398,28 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                         // setup new level of indirection
                         if (i_node->double_indirect.valid) {
                                 bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                                if (indr2->blocks[j].valid) {
-                                        bufdread(indr2->blocks[j].block ,(char *) indr, sizeof(indirect));
+                                if (indr2->blocks[0].valid) {
+                                        bufdread(indr2->blocks[0].block ,(char *) indr, sizeof(indirect));
                                 }
                                 else {
-                                        indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                        indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
                                         free(indr);
                                         indr = indirect_create();
-                                        indr->blocks[j] = blocknum_create(0, 0);
-                                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+                                        for (i = 0; i < 128; i++) {
+                                                indr->blocks[i] = blocknum_create(0, 0);
+                                        }
+                                        bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
                                 }
                         }
                         else {
                                 i_node->double_indirect = blocknum_create(getNextFree(v), 1);
                                 // TODO: check validity of free blocks everywhere
-                                indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
                                 free(indr);
                                 indr = indirect_create();
-                                indr->blocks[0] = blocknum_create(0, 0);
+                                for (i = 0; i < 128; i++) {
+                                        indr->blocks[i] = blocknum_create(0, 0);
+                                }
                                 bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
                         }
 
@@ -1431,7 +1448,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                         indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
                                         free(indr);
                                         indr = indirect_create();
-                                        indr->blocks[0] = blocknum_create(0, 0);
+                                        for (i = 0; i < 128; i++) {
+                                                indr->blocks[i] = blocknum_create(0, 0);
+                                        }
+                                        //indr->blocks[0] = blocknum_create(0, 0);
                                         bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                                 }
                                 cur_b = 0;
