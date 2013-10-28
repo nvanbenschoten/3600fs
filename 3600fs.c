@@ -220,7 +220,12 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 		return -1;
 	}
 
-	printf("%s %s\n", pathcpy, name);
+	if (strlen(name) > 26) {
+		printf("Error new filename too long\n");
+		free(pathcpy);
+		free(name);
+		return -1;
+	}
 
 	//Read vcb
 	dnode *d = dnode_create(0, 0, 0, 0);
@@ -902,6 +907,13 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 			free(pathcpy);
 			free(name);
 			return -1;
+	}
+
+	if (strlen(name) > 26) {
+		printf("Error new filename too long\n");
+		free(pathcpy);
+		free(name);
+		return -1;
 	}
 
 	// Read vcb
