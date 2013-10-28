@@ -886,6 +886,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 					struct fuse_file_info *fi)
 {
+	UNUSED(fi);
+
 	// Move down path
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
