@@ -483,6 +483,14 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	bufdread(v->root.block, (char *)d, sizeof(dnode));
 	blocknum block = blocknum_create(v->root.block, 1);
 
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+		printf("Error seperating the path and filename\n");
+		free(pathcpy);
+		free(name);
+		return -1;
+	}
+
 	if (strcmp(pathcpy, "/")) {
 		// If path isnt the root directory
 		// Transforms d to the correct directory
