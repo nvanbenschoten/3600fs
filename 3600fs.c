@@ -1654,12 +1654,176 @@ static int vfs_utimens(const char *path, const struct timespec ts[2])
  * (essentially, it should shorten the file to only be offset
  * bytes long).
  */
-static int vfs_truncate(const char *file, off_t offset)
+static int vfs_truncate(const char *path, off_t offset)
 {
+	// Determine correct file and path from the name
+	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(pathcpy != NULL);
+	strcpy(pathcpy, path);
 
-	/* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
-		   BE AVAILABLE FOR OTHER FILES TO USE. */
+	char *name = (char *)calloc(strlen(path) + 1, sizeof(char));
+	assert(name != NULL);
 
+	// Seperating the directory name from the file/directory name
+	if (seperatePathAndName(pathcpy, name)) {
+		free(pathcpy);
+		free(name);
+		printf("Error seperating the path and filename\n");
+		return -1;
+	}
+
+	// Read vcb
+	dnode *d = dnode_create(0, 0, 0, 0);
+	bufdread(v->root.block, (char *)d, sizeof(dnode));
+	blocknum dirBlock = blocknum_create(v->root.block, 1);
+
+	if (strcmp(pathcpy, "/")) {
+		// If path isnt the root directory
+		// Transforms d to the correct directory
+		if(findDNODE(d, pathcpy, &dirBlock)) {
+			// If directory could not be found
+			printf("Could not find directory\n");
+			free(pathcpy);
+			free(name);
+			dnode_free(d);
+			return -1;
+		}
+	}
+
+	if (!strcmp(name, "")) {
+		// If name is blank, it means that it is refering to the current directory
+		strcpy(name, ".");
+	}
+
+	dnode *matchd = dnode_create(0, 0, 0, 0);
+	inode *matchi = inode_create(0, 0, 0, 0);
+	
+	blocknum block;
+	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
+	dnode_free(d);
+	dnode_free(matchd);
+	free(pathcpy);
+	free(name);
+
+	// Check to see if match is valid
+	if (ret < 1) {
+		printf("Could not find file\n");
+		inode_free(matchi);
+		return -1;
+	}
+	else if (ret == 1) {
+		// If the dirent is for a file
+
+		// If size is greater than the file size
+		if (matchi->size < offset) {
+			printf("Offset is larger than the file\n");
+			return -1;
+		}
+		
+		//If the trunction is good
+		matchi->size = offset;
+
+		// Count = to last data block valid
+		unsigned int count = (offset + BLOCKSIZE - 1)/(BLOCKSIZE);
+		while (count < 110) {
+			if (matchi->direct[count].valid) {
+				// If valid and above cutoff point
+				releaseFree(v, matchi->direct[count].block);
+				matchi->direct[count].valid = 0;
+			}
+			count++;
+		}
+
+		// Single indirection
+		if (matchi->single_indirect.valid && count < 128+110) {
+			// Will be
+			int deleteInd = (count <= 110);
+
+			indirect *ind = indirect_create();
+			bufdread(matchi->single_indirect.block, (char *)ind, sizeof(indirect));
+
+			while(count < 128+110) {
+				if (ind->blocks[count-110].valid) {
+					releaseFree(v, ind->blocks[count-110].block);
+					ind->blocks[count-110].valid = 0;
+				}	
+				count++;
+			}
+
+			if (deleteInd) {
+				releaseFree(v, matchi->single_indirect.block);
+				matchi->single_indirect.valid = 0;
+			} else {
+				bufdwrite(matchi->single_indirect.block, (char *)ind, sizeof(indirect));
+			}
+
+			indirect_free(ind);
+		}
+		else {
+			count += 128;
+		}
+
+		// Double indirection
+		if (matchi->double_indirect.valid && count < 128*128+128+110) {
+
+			// Will be
+			int deleteFirstInd = (count <= 110+128);
+
+			indirect *firstind = indirect_create();
+			bufdread(matchi->double_indirect.block, (char *)firstind, sizeof(indirect));
+
+			while(count < 128*128+128+110) {
+				// While below limit of direct, first indirect, and second indirect
+
+				if (firstind->blocks[(count-110-128)/128].valid) {
+					// If first indirect is valid
+					int deleteSecInd = (count <= ((count-110-128)/128)*128 + 110 + 128);
+
+					// Read in second indirect
+					indirect *secind = indirect_create();
+					bufdread(firstind->blocks[(count-110-128)/128].block, (char *)secind, sizeof(indirect));
+
+					int k;
+					for (k = (count-110-128)%128; k < 128; k++) {
+						// K is equal to the index in the second indirect block
+						if (secind->blocks[k].valid) {
+							releaseFree(v, secind->blocks[k].block);
+						}
+						
+						count++;
+					}
+
+					if (deleteSecInd) {
+						releaseFree(v, firstind->blocks[(count-110-128)/128 - 1].block);
+						firstind->blocks[(count-110-128)/128 - 1].valid = 0;
+					} else {
+						bufdwrite(firstind->blocks[(count-110-128)/128 - 1].block, (char *)secind, sizeof(indirect));
+					}
+
+					indirect_free(secind);
+				}
+				else {
+					count += 128;
+				}
+			}
+
+			if (deleteFirstInd) {
+				releaseFree(v, matchi->double_indirect.block);
+				matchi->double_indirect.valid = 0;
+			} else {
+				bufdwrite(matchi->double_indirect.block, (char *)firstind, sizeof(indirect));
+			}
+
+			indirect_free(firstind);
+		}
+		else {
+			count += 128*128;
+		}
+
+		bufdwrite(block.block, (char *) matchi, sizeof(inode));
+	}
+
+	inode_free(matchi);
 	return 0;
 }
 
