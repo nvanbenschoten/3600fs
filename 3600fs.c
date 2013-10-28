@@ -1728,7 +1728,7 @@ static int vfs_truncate(const char *path, off_t offset)
 		while (count < 110) {
 			if (matchi->direct[count].valid) {
 				// If valid and above cutoff point
-				releaseFree(v, matchi->direct[count].block);
+				releaseFree(v, matchi->direct[count]);
 				matchi->direct[count].valid = 0;
 			}
 			count++;
@@ -1744,14 +1744,14 @@ static int vfs_truncate(const char *path, off_t offset)
 
 			while(count < 128+110) {
 				if (ind->blocks[count-110].valid) {
-					releaseFree(v, ind->blocks[count-110].block);
+					releaseFree(v, ind->blocks[count-110]);
 					ind->blocks[count-110].valid = 0;
 				}	
 				count++;
 			}
 
 			if (deleteInd) {
-				releaseFree(v, matchi->single_indirect.block);
+				releaseFree(v, matchi->single_indirect);
 				matchi->single_indirect.valid = 0;
 			} else {
 				bufdwrite(matchi->single_indirect.block, (char *)ind, sizeof(indirect));
@@ -1787,14 +1787,14 @@ static int vfs_truncate(const char *path, off_t offset)
 					for (k = (count-110-128)%128; k < 128; k++) {
 						// K is equal to the index in the second indirect block
 						if (secind->blocks[k].valid) {
-							releaseFree(v, secind->blocks[k].block);
+							releaseFree(v, secind->blocks[k]);
 						}
 						
 						count++;
 					}
 
 					if (deleteSecInd) {
-						releaseFree(v, firstind->blocks[(count-110-128)/128 - 1].block);
+						releaseFree(v, firstind->blocks[(count-110-128)/128 - 1]);
 						firstind->blocks[(count-110-128)/128 - 1].valid = 0;
 					} else {
 						bufdwrite(firstind->blocks[(count-110-128)/128 - 1].block, (char *)secind, sizeof(indirect));
@@ -1808,7 +1808,7 @@ static int vfs_truncate(const char *path, off_t offset)
 			}
 
 			if (deleteFirstInd) {
-				releaseFree(v, matchi->double_indirect.block);
+				releaseFree(v, matchi->double_indirect);
 				matchi->double_indirect.valid = 0;
 			} else {
 				bufdwrite(matchi->double_indirect.block, (char *)firstind, sizeof(indirect));
