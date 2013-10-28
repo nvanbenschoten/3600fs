@@ -1952,7 +1952,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
-					if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
+					if ((de->entries[j].type == 0) && (!strcmp(de->entries[j].name, searchPath))) {
 						// If match found, overwrite current dnode
 						block->block = de->entries[j].block.block;
 						block->block = de->entries[j].block.valid;
@@ -1997,7 +1997,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 					// j = direntry entry
 					if (de->entries[j].block.valid) {
 						count++;
-						if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
+						if ((de->entries[j].type == 0) && (!strcmp(de->entries[j].name, searchPath))) {
 							// If match found, overwrite current dnode
 							block->block = de->entries[j].block.block;
 							block->block = de->entries[j].block.valid;
@@ -2053,7 +2053,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 							// j = direntry entry
 							if (de->entries[j].block.valid) {
 								count++;
-								if ((de->entries[j].type = 0) && (!strcmp(de->entries[j].name, searchPath))) {
+								if ((de->entries[j].type == 0) && (!strcmp(de->entries[j].name, searchPath))) {
 									// If match found, overwrite current dnode
 
 									block->block = de->entries[j].block.block;
