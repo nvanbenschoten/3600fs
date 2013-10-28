@@ -1955,7 +1955,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 					if ((de->entries[j].type == 0) && (!strcmp(de->entries[j].name, searchPath))) {
 						// If match found, overwrite current dnode
 						block->block = de->entries[j].block.block;
-						block->block = de->entries[j].block.valid;
+						block->valid = de->entries[j].block.valid;
 
 						bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 						free(searchPath);
@@ -2000,7 +2000,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 						if ((de->entries[j].type == 0) && (!strcmp(de->entries[j].name, searchPath))) {
 							// If match found, overwrite current dnode
 							block->block = de->entries[j].block.block;
-							block->block = de->entries[j].block.valid;
+							block->valid = de->entries[j].block.valid;
 
 							bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 							free(searchPath);
@@ -2057,7 +2057,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 									// If match found, overwrite current dnode
 
 									block->block = de->entries[j].block.block;
-									block->block = de->entries[j].block.valid;
+									block->valid = de->entries[j].block.valid;
 									
 									bufdread(de->entries[j].block.block, (char *)directory, sizeof(dnode));
 									// Free variables
