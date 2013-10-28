@@ -220,11 +220,11 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 		return -1;
 	}
 
-	if (strlen(name) > 26) {
-		printf("Error new filename too long\n");
+	if(strlen(name) > 26) {
+		printf("File name too long\n");
 		free(pathcpy);
 		free(name);
-		return -1;
+		return -ENAMETOOLONG;
 	}
 
 	//Read vcb
@@ -662,6 +662,13 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		free(pathcpy);
 		free(name);
 		return -1;
+	}
+
+	if(strlen(name) > 26) {
+		printf("File name too long\n");
+		free(pathcpy);
+		free(name);
+		return -ENAMETOOLONG;
 	}
 
 	// Read vcb
@@ -1709,7 +1716,12 @@ static int vfs_rename(const char *from, const char *to)
 
 	if (strlen(newName) > 26) {
 		printf("Error new filename too long\n");
-		return -1;
+		free(pathcpy);
+		free(name);
+		dnode_free(d);
+		free(pathcpy2);
+		free(newName);
+		return -ENAMETOOLONG;
 	}
 
 	dnode *matchd = dnode_create(0, 0, 0, 0);
