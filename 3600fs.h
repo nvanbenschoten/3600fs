@@ -37,7 +37,9 @@ typedef struct vcb_s {
 	// the location of the first free block
 	blocknum free;
 	// the name of your disk
-	char name[496];
+	char name[495];
+	// a dirty bit to check if it was removed correctly
+	char dirty;
 } vcb;
 
 typedef struct dnode_t {

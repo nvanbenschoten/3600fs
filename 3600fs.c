@@ -64,6 +64,15 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 		dunconnect();
 	}
 
+	if (v->dirty) {
+		// Perform integrity check
+	}
+
+	// update vcb with dirty bit
+	v->dirty = 1;
+	bufdwrite(0, (char *) v, sizeof(vcb));
+
+
 
 	return NULL;
 }
@@ -80,6 +89,10 @@ static void vfs_unmount (void *private_data) {
 	/* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
 		ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
 		KEEP DATA CACHED THAT'S NOT ON DISK */
+
+	// update vcb with dirty bit
+	v->dirty = 0;
+	bufdwrite(0, (char *) v, sizeof(vcb));
 
 	vcb_free(v);
 

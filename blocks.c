@@ -2,6 +2,10 @@
 
 const int DISKNUMBER = 13371337;
 
+blocknum cacheBlockNum [10];
+char cacheBlock [10*512];
+int cacheOrder [10] = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+
 // Constructors
 blocknum blocknum_create(int num, unsigned int valid) {
     blocknum s;
@@ -138,11 +142,53 @@ int bufdread(int blocknum, char * buf, int size) {
     char tmp[BLOCKSIZE];
     memset(tmp, 0, BLOCKSIZE);
 
-    int ret = dread(blocknum, tmp);
-    if (ret < 0)
-        disk_crash();
+    // Deal with cache
+    int i;
+    int hit = 0;
+    for(i = 0; i < 10; i++) {
+        if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum.block) {
+            // Hit
+            memcpy(buf, cacheBlock[i*512], size);
 
-    memcpy(buf, tmp, size);
+            cacheOrder[i] = 0;
+
+            int j;
+            for (j = 0; j < 10; j++) {
+                if (j != i)
+                    cacheOrder[j]++;
+            }
+
+            hit = 1;
+            break;
+        }
+    }
+
+    if (hit == 0) {
+        // Miss
+        int ret = dread(blocknum, tmp);
+        if (ret < 0)
+            disk_crash();
+
+        memcpy(buf, tmp, size);
+
+        // Add to cache
+        int j = 0;
+        while(cacheOrder[j] != 9) {
+            j++;
+        }
+
+        memcpy(cacheBlock[j*512], buf, size);
+
+        cacheBlockNum[j] = blocknum_create(blocknum.block, 1);
+
+        cacheOrder[j] = 0;
+
+        int k = 0;
+        for (k = 0; k < 10; k++) {
+            if (k != j)
+                cacheOrder[k]++;
+        }
+    }
 
     return ret;
 }
@@ -155,6 +201,15 @@ int bufdwrite(int blocknum, const char * buf, int size) {
     int ret = dwrite(blocknum, tmp);
     if (ret < 0)
         disk_crash();
+
+    int i;
+    for(i = 0; i < 10; i++) {
+        if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum.block) {
+            // Hit
+            memcpy(cacheBlock[i*512], buf, size);
+            break;
+        }
+    }
 
     return ret;
 }
