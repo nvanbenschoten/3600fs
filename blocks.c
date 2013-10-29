@@ -142,11 +142,13 @@ int bufdread(int blocknum, char * buf, int size) {
     char tmp[BLOCKSIZE];
     memset(tmp, 0, BLOCKSIZE);
 
+    int ret = 0;
+
     // Deal with cache
     int i;
     int hit = 0;
     for(i = 0; i < 10; i++) {
-        if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum.block) {
+        if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum) {
             // Hit
             memcpy(buf, cacheBlock[i*512], size);
 
@@ -165,7 +167,7 @@ int bufdread(int blocknum, char * buf, int size) {
 
     if (hit == 0) {
         // Miss
-        int ret = dread(blocknum, tmp);
+        ret = dread(blocknum, tmp);
         if (ret < 0)
             disk_crash();
 
@@ -177,9 +179,9 @@ int bufdread(int blocknum, char * buf, int size) {
             j++;
         }
 
-        memcpy(cacheBlock[j*512], buf, size);
+        memcpy(&cacheBlock[j*512], buf, size);
 
-        cacheBlockNum[j] = blocknum_create(blocknum.block, 1);
+        cacheBlockNum[j] = blocknum_create(blocknum, 1);
 
         cacheOrder[j] = 0;
 
@@ -204,9 +206,9 @@ int bufdwrite(int blocknum, const char * buf, int size) {
 
     int i;
     for(i = 0; i < 10; i++) {
-        if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum.block) {
+        if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum) {
             // Hit
-            memcpy(cacheBlock[i*512], buf, size);
+            memcpy(&cacheBlock[i*512], buf, size);
             break;
         }
     }
