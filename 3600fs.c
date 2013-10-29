@@ -360,7 +360,6 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                             bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
                     }
                     else { // need to actually create blocknum etc
-                            //d->single_indirect.block = create_blocknum(); 
                             if ((fr = getNextFree(v)) >= 0) {
                                     d->single_indirect = blocknum_create(fr, 1);
                             }
@@ -386,7 +385,6 @@ static int vfs_mkdir(const char *path, mode_t mode) {
             else if (lvl == 1) { // we need to move to double_indirect block
                     if (d->double_indirect.valid) { // if blocknum valid
                             bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect)); // can use it
-                            // TODO can probably also merge lvl 2 to here if clever
                             if (indr2->blocks[0].valid) { // if 2nd level valid
                                     bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
                             }
@@ -454,13 +452,13 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                     dbs = indr->blocks;
                     lvl++;
             }
-            else if (lvl == 2) {
+            else if (lvl == 2) { // else we are already in second level of indirection
                     j++;
-                    if (j != 128) {
-                            if (indr2->blocks[j].valid) {
+                    if (j < 128) { // if there are still indirects to check
+                            if (indr2->blocks[j].valid) { // if next first level indirect is usable
                                     bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                             }
-                            else { // need to setup blank indr
+                            else { // otherwise need to setup blank indr
                                     if ((fr = getNextFree(v)) >= 0) {
                                             indr2->blocks[j] = blocknum_create(fr, 1);
                                     }
@@ -485,7 +483,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                             dirents = 128;
                             dbs = indr->blocks;
                     }
-                    else {
+                    else { // we have run out of indirection space
                             lvl++;
                     }
             }
@@ -499,7 +497,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                     free(d_new);
                     free(pathcpy);
 		    free(name);
-                    // error
+                    // error and return
                     printf("Error no directory entry available to create file.\n");
                     return -1;
             }
@@ -535,7 +533,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
     bufdwrite(dnode_block, (char *) d_new, sizeof(dnode));
 
     d->size += 1;
-    // WRITE DBS dependent on lvl holy fk
+    // write DBS dependent on lvl... thank god this is the end
     switch (lvl) {
             case 0:
                     d->direct[ent_b] = dbs[ent_b];
@@ -553,11 +551,8 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                     bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
                     bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                     break;
-            // case 3 is probably not necessary as if lvl = 3
+            // case 3 is probably necessary as if lvl = 3
             // it means there was no space so should have returned with error already
-            //case 3:
-
-            //        break;
     }
 	// update vcb
 	bufdwrite(0, (char *) v, sizeof(vcb));
@@ -639,7 +634,6 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			int j;
 			for (j = count%16; j < 16; j++) {
 				// j = direntry entry
-				//printf("Direct nodes %i : %i\n", count, j);
 				count++;
 				if (de->entries[j].block.valid) {
 					// If the entry is valid
@@ -673,7 +667,6 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 				int j;
 				for (j = count%16; j < 16; j++) {
 					// j = direntry entry
-					//printf("Indirect nodes %i : %i\n", count, j);
 					count++;
 					if (de->entries[j].block.valid) {
 						// If the entry is valid
@@ -727,7 +720,6 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 						int j;
 						for (j = (count-110*16-128*16)%16; j < 16; j++) {
 							// j = direntry entry
-							//printf("Double Indirect nodes %i : %i : %i\n", count, k, j);
 							count++;
 							if (de->entries[j].block.valid) {
 								// If the entry is valid
@@ -807,7 +799,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		// If path isnt the root directory
 		// Transforms d to the correct directory
 		if(findDNODE(d, pathcpy, &dirBlock)) {
-			// If ditectory could not be found
+			// If directory could not be found
 			printf("Could not find directory\n");
 			dnode_free(d);
 			free(pathcpy);
@@ -822,12 +814,10 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	blocknum block;
         int fr;
 	int ret = getNODE(d, name, temp_d, temp_i, &block, 0, 0, 0, "");
-	if (ret >= 0) {
-		// COMMENT Made it so it file or dir match, it returns
+	if (ret >= 0) { // there was an error so free and return
 		dnode_free(d);
 		dnode_free(temp_d);
 		inode_free(temp_i);
-		// do pathcpy and name need to be freed?
 		free(pathcpy);
 		free(name);
 		return -EEXIST;
@@ -931,7 +921,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                 bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
                         }
                         else { // need to actually create blocknum etc
-                                //d->single_indirect.block = create_blocknum(); 
                                 if ((fr = getNextFree(v)) >= 0) {
                                         d->single_indirect = blocknum_create(fr, 1);
                                 }
@@ -957,7 +946,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                 else if (lvl == 1) { // we need to move to double_indirect block
                         if (d->double_indirect.valid) { // if blocknum valid
                                 bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect)); // can use it
-                                // TODO can probably also merge lvl 2 to here if clever
                                 if (indr2->blocks[0].valid) { // if 2nd level valid
                                         bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
                                 }
@@ -1025,7 +1013,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         dbs = indr->blocks;
                         lvl++;
                 }
-                else if (lvl == 2) {
+                else if (lvl == 2) { // we need to move within the second indirect entries
                         j++;
                         if (j != 128) {
                                 if (indr2->blocks[j].valid) {
@@ -1070,7 +1058,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         free(i_new);
                         free(pathcpy);
 			free(name);
-                        // error
+                        // error and return
                         printf("Error no directory entry available to create file.\n");
                         return -1;
                 }
@@ -1082,7 +1070,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
         bufdwrite(inode_block, (char *) i_new, sizeof(inode));
 
         d->size += 1;
-        // WRITE DBS dependent on lvl holy fk
+        // WRITE DBS dependent on lvl
         switch (lvl) {
                 case 0:
                         d->direct[ent_b] = dbs[ent_b];
@@ -1094,17 +1082,14 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
                         break;
 
-                case 2: // j could be off by 1, but i dont think it is atm
+                case 2: 
                         indr->blocks[ent_b] = dbs[ent_b];
                         bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
                         bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
                         bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                         break;
-                // case 3 is probably not necessary as if lvl = 3
+                // case 3 is not necessary as if lvl = 3
                 // it means there was no space so should have returned with error already
-                //case 3:
-
-                //        break;
         }
 	// update vcb
 	bufdwrite(0, (char *) v, sizeof(vcb));
@@ -1186,7 +1171,6 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 	blocknum block;
 	int ret = getNODE(d, name, d_temp, i_node, &block, 0, 0, 0, "");
 	if (ret != 1) { // if didnt find matching file node
-		// what does findNODE return if both match??
 		inode_free(i_node);
 		dnode_free(d_temp);
 		dnode_free(d);
@@ -1195,13 +1179,6 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 		printf("Could not find file to read or file is a directory");
 		return -1;
 	}
-
-
-	// go to block which offset is contained in
-	// have to consider indirects here at some point also, so do the math on that one
-	// then memcpy from that block into buf, while increasing, need to maintain another
-	// offset which is the actual offset within buf, and keep repeating copying until
-	// we have copied up to size bytes, again will need to follow down indirects
 	
         unsigned int copied = 0;
 	int blocks = ((int)offset)/sizeof(db); // calculate num blocks to look in
@@ -1373,7 +1350,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                         }   
                 }
                 // if need to move within double indirect
-                else if (lvl == 2) { // srsly merge with lvl 1 and use an if
+                else if (lvl == 2) { // if we need to move within indirection levels 
                         if (j < 128 && indr2->blocks[j].valid) {
                                 if (indr2->blocks[j].valid) {
                                         bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
@@ -1404,10 +1381,6 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                                 free(pathcpy);
                                 return copied;
                         }
-                }
-                // else return and be done
-                else {
-                        // pointless else jesus cant even get here
                 }
         }
 
@@ -1475,10 +1448,9 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
 	inode *i_node = inode_create(0, 0, 0, 0);
 	dnode *d_temp = dnode_create(0, 0, 0, 0);
-	blocknum block; // TODO: make sure flags below are okay
+	blocknum block; 
 	int ret = getNODE(d, name, d_temp, i_node, &block, 0, 0, 0, "");
 	if (ret != 1) { // if didnt find matching file node
-		// what does findNODE return if both match??
 		inode_free(i_node);
 		dnode_free(d_temp);
 		dnode_free(d);
@@ -1533,7 +1505,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                 }
         }
         else if (blocks < 16622) { // double indirect magic numbers
-                lvl++; 
+                lvl++; // these two lines are the best in the program
                 lvl++; // lol
                 if (i_node->double_indirect.valid) {
                         bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
@@ -1545,15 +1517,12 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                 blocks_write = 128;
                         }
                         else { // once again an else that should never happen
-                                // free and return??
                         }
                 }
                 else { // should never happen 
-                        // free and return????
                 }
         }
         else {
-                // TODO should this be -ENOSPC ???
                 printf("Error: File offset too large, file size not supported\n");
                 return -ENOSPC;
         }
@@ -1563,9 +1532,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                 if (cur_b < blocks_write) { // if there are more blocks to check in dbs
                         if (dbs[cur_b].valid) { // if the current block is valid we can use it
                                 if (usable_offset < offset) { // only read in part that needs to be nonzero
-                                        //if (block_offset != 0) { // we need to read in only part of the block
                                         bufdread(dbs[cur_b].block, (char *) tmp, block_offset);
-                                        //}
                                 }
                                 else {
                                         bufdread(dbs[cur_b].block, (char *) tmp, sizeof(db)); // read in data block
@@ -1599,7 +1566,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                         block_offset = 0;
                                 }
                                 else { // otherwise just copy partially into block
-                                        //memcpy(tmp+block_offset, (char *) tmp, offset - usable_offset);
                                         bufdwrite (dbs[cur_b].block, (char *) tmp, offset-usable_offset);
                                         written += offset-usable_offset;
                                         // and reset our block offset
@@ -1646,7 +1612,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                         return -ENOSPC;
                                 }
                                 indr->blocks[0] = blocknum_create(0, 0);
-                                // TODO: once again check getNextFree
                         }
                         dbs = indr->blocks;
                         cur_b = 0; 
@@ -1762,7 +1727,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                         for (i = 0; i < 128; i++) {
                                                 indr->blocks[i] = blocknum_create(0, 0);
                                         }
-                                        //indr->blocks[0] = blocknum_create(0, 0);
                                         bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                                 }
                                 cur_b = 0;
