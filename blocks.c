@@ -2,6 +2,7 @@
 
 const int DISKNUMBER = 13371337;
 
+// Cache!!!
 blocknum cacheBlockNum [100];
 char cacheBlock [100*512];
 int cacheOrder [100];

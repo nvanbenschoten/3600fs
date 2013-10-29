@@ -74,8 +74,6 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 	v->dirty = 1;
 	bufdwrite(0, (char *) v, sizeof(vcb));
 
-
-
 	return NULL;
 }
 
@@ -96,6 +94,7 @@ static void vfs_unmount (void *private_data) {
 	v->dirty = 0;
 	bufdwrite(0, (char *) v, sizeof(vcb));
 
+	// Free vcb
 	vcb_free(v);
 
 	// Do not touch or move this code; unconnects the disk
@@ -121,6 +120,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	stbuf->st_rdev  = 0;
 	stbuf->st_blksize = BLOCKSIZE;
 
+	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, path);
@@ -159,9 +159,9 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		strcpy(name, ".");
 	}
 
+	// Get the node
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
-	
 	blocknum block;
 	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
@@ -216,6 +216,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 static int vfs_mkdir(const char *path, mode_t mode) {
 
+	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, path);
@@ -582,7 +583,6 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 	free(pathcpy);
 	free(name);
 
-
   	return 0;
 }
 
@@ -616,6 +616,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	if (path[0] != '/')
 		return -1;
 
+	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, path);
@@ -783,6 +784,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	UNUSED(fi);
 
 	// Move down path
+	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, path);
@@ -1138,8 +1140,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 					struct fuse_file_info *fi)
 {
-        UNUSED(fi);
+    UNUSED(fi);
 	// Move down path
+    // Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, path);
@@ -1181,6 +1184,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 			}
 	}
 
+	// Get correct node
 	inode *i_node = inode_create(0, 0, 0, 0);
 	dnode *d_temp = dnode_create(0, 0, 0, 0);
 	blocknum block;
@@ -1425,8 +1429,9 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 static int vfs_write(const char *path, const char *buf, size_t size,
 					 off_t offset, struct fuse_file_info *fi)
 {
-        UNUSED(fi);
+    UNUSED(fi);
 	// Move down path
+	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, path);
@@ -1461,6 +1466,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 			}
 	}
 
+	// Find node
 	inode *i_node = inode_create(0, 0, 0, 0);
 	dnode *d_temp = dnode_create(0, 0, 0, 0);
 	blocknum block; 
@@ -1474,7 +1480,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		printf("Could not find file to write to or file is a directory");
 		return -1;
 	}
-
+	dnode_free(d_temp);
         // Actual unique write code starts here
 
         unsigned int written = 0;
@@ -1823,6 +1829,7 @@ static int vfs_delete(const char *path)
 			AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
 
 	// Move down path
+	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, path);
@@ -1857,6 +1864,7 @@ static int vfs_delete(const char *path)
 			}
 	}
 
+	// Get correct node
 	inode *i_node = inode_create(0, 0, 0, 0);
 	dnode *d_temp = dnode_create(0, 0, 0, 0);
 	blocknum block;
@@ -1965,6 +1973,7 @@ static int vfs_rename(const char *from, const char *to)
 {
 	vfs_delete(to);
 
+	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(from) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, from);
@@ -2038,9 +2047,9 @@ static int vfs_rename(const char *from, const char *to)
 		return -ENAMETOOLONG;
 	}
 
+	// Get correct node
 	dnode *matchd = dnode_create(0, 0, 0, 0);
-	inode *matchi = inode_create(0, 0, 0, 0);
-	
+	inode *matchi = inode_create(0, 0, 0, 0);	
 	blocknum block;
 	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 1, newName);
 	
@@ -2111,9 +2120,9 @@ static int vfs_chmod(const char *path, mode_t mode)
 		strcpy(name, ".");
 	}
 
+	// Get correct node
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
-	
 	blocknum block;
 	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
@@ -2189,9 +2198,9 @@ static int vfs_chown(const char *path, uid_t uid, gid_t gid)
 		strcpy(name, ".");
 	}
 
+	// Get correct node
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
-	
 	blocknum block;
 	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
@@ -2268,9 +2277,9 @@ static int vfs_utimens(const char *path, const struct timespec ts[2])
 		strcpy(name, ".");
 	}
 
+	// Get correct node
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
-	
 	blocknum block;
 	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
@@ -2348,9 +2357,9 @@ static int vfs_truncate(const char *path, off_t offset)
 		strcpy(name, ".");
 	}
 
+	// Get correct node
 	dnode *matchd = dnode_create(0, 0, 0, 0);
 	inode *matchi = inode_create(0, 0, 0, 0);
-	
 	blocknum block;
 	int ret = getNODE(d, name, matchd, matchi, &block, 0, 0, 0, "");
 	dnode_free(d);
