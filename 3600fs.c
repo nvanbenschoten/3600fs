@@ -236,7 +236,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 		return -1;
 	}
 
-	if(strlen(name) > 26) {
+	if(strlen(name) > 27) {
 		printf("File name too long\n");
 		free(pathcpy);
 		free(name);
@@ -800,7 +800,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		return -1;
 	}
 
-	if(strlen(name) > 26) {
+	if(strlen(name) > 27) {
 		printf("File name too long\n");
 		free(pathcpy);
 		free(name);
@@ -2037,7 +2037,7 @@ static int vfs_rename(const char *from, const char *to)
 		}
 	}
 
-	if (strlen(newName) > 26) {
+	if (strlen(newName) > 27) {
 		printf("Error new filename too long\n");
 		free(pathcpy);
 		free(name);
@@ -2548,8 +2548,6 @@ int seperatePathAndName(char *path, char *name) {
 
 	// Null terminates each string
 	name[j] = '\0';
-	name[26] = '\0';
-
 	path[i+1] = '\0';
 
 	return 0;

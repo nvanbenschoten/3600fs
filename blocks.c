@@ -134,6 +134,20 @@ void freeblock_free(freeblock *s) {
 
 
 // Helper functions
+char *getName(direntry direntry) {
+    char *name = (char *)calloc(28, sizeof(char));
+    assert(name != NULL);
+
+    strncpy(name, direntry.name, 27);
+    name[27] = '\0';
+
+    return name;
+}
+
+void setName(direntry *direntry, char *name) {
+    strncpy(direntry->name, name, 27);
+}
+
 void disk_crash() {
     printf("ERROR: Your disk image crashed\n");
     exit(1);

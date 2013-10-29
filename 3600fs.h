@@ -119,6 +119,8 @@ void db_free(db *s);
 void freeblock_free(freeblock *s);
 
 // Global helper Functions
+char *getName(direntry direntry);
+void setName(direntry direntry, char *name);
 void disk_crash();
 int bufdread(int blocknum, char * buf, int size);
 int bufdwrite(int blocknum, const char * buf, int size);
