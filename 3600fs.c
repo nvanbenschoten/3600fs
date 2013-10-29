@@ -308,7 +308,8 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                             for (i = 0; i < 16; i++) { // look through the direntries
                                     if (!de->entries[i].block.valid) { // if any of the entries are invalid
                                             // meaning we can use them to write to
-                                            strcpy(de->entries[i].name, name); // write to them
+                                            //strcpy(de->entries[i].name, name); 
+                                            setName(&de->entries[i], name); // write to them
                                             de->entries[i].type = 0; // 0 = dir
                                             if ((fr = getNextFree(v)) >= 0) {
                                                     de->entries[i].block = blocknum_create(fr, 1);
@@ -348,7 +349,8 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                                     free(name);
                                     return -ENOSPC;
                             }
-                            strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
+                            //strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
+                            setName(&de_new->entries[0], name); // write to them
                             de_new->entries[0].type = 0;
                             if ((fr = getNextFree(v)) >= 0) {
                                     de_new->entries[0].block = blocknum_create(fr, 1);
@@ -653,12 +655,15 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 				count++;
 				if (de->entries[j].block.valid) {
 					// If the entry is valid
-					if(filler(buf, de->entries[j].name, NULL, count)) {
+					char *dname = getName(de->entries[j]);
+					if(filler(buf, dname, NULL, count)) {
 						dirent_free(de);
 						dnode_free(d);
 						free(pathcpy);
+						free(dname);
 						return 0;
 					}
+					free(dname);
 				}
 			}
 
@@ -686,13 +691,16 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 					count++;
 					if (de->entries[j].block.valid) {
 						// If the entry is valid
-						if(filler(buf, de->entries[j].name, NULL, count)) {
+						char *dname = getName(de->entries[j]);
+						if(filler(buf, dname, NULL, count)) {
 							indirect_free(ind);
 							dirent_free(de);
 							dnode_free(d);
 							free(pathcpy);
+							free(dname);
 							return 0;
 						}
+						free(dname);
 					}
 				}
 
@@ -739,14 +747,17 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 							count++;
 							if (de->entries[j].block.valid) {
 								// If the entry is valid
-								if(filler(buf, de->entries[j].name, NULL, count)) {
+								char *dname = getName(de->entries[j]);
+								if(filler(buf, dname, NULL, count)) {
 									indirect_free(firstind);
 									indirect_free(secind);
 									dirent_free(de);
 									dnode_free(d);
 									free(pathcpy);
+									free(dname);
 									return 0;
 								}
+								free(dname);
 							}
 						}
 
@@ -870,7 +881,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                 for (i = 0; i < 16; i++) { // look through the direntries
                                         if (!de->entries[i].block.valid) { // if any of the entries are invalid
                                                 // meaning we can use them to write to
-                                                strcpy(de->entries[i].name, name); // write to them
+                                                setName(&de->entries[i], name); // write to them
                                                 de->entries[i].type = 1; // 1 = file
                                                 if ((fr = getNextFree(v)) >= 0) {
                                                         de->entries[i].block = blocknum_create(fr, 1);
@@ -910,7 +921,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                         free(name);
                                         return -ENOSPC;
                                 }
-                                strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
+                                setName(&de_new->entries[0], name); // write new direnty to new dirent
                                 de_new->entries[0].type = 1;
                                 if ((fr = getNextFree(v)) >= 0) {
                                         de_new->entries[0].block = blocknum_create(fr, 1);
@@ -2612,7 +2623,9 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
-					if ((de->entries[j].type == 0) && (!strcmp(de->entries[j].name, searchPath))) {
+					char *dname = getName(de->entries[j]);
+					if ((de->entries[j].type == 0) && (!strcmp(dname, searchPath))) {
+						free(dname);
 						// If match found, overwrite current dnode
 						block->block = de->entries[j].block.block;
 						block->valid = de->entries[j].block.valid;
@@ -2632,6 +2645,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 							return 0;
 						}
 					}
+					free(dname);
 				}
 			}
 
@@ -2657,7 +2671,9 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 					// j = direntry entry
 					if (de->entries[j].block.valid) {
 						count++;
-						if ((de->entries[j].type == 0) && (!strcmp(de->entries[j].name, searchPath))) {
+						char *dname = getName(de->entries[j]);
+						if ((de->entries[j].type == 0) && (!strcmp(dname, searchPath))) {
+							free(dname);
 							// If match found, overwrite current dnode
 							block->block = de->entries[j].block.block;
 							block->valid = de->entries[j].block.valid;
@@ -2678,6 +2694,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 								return 0;
 							}
 						}
+						free(dname);
 					}
 				}
 
@@ -2713,7 +2730,9 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 							// j = direntry entry
 							if (de->entries[j].block.valid) {
 								count++;
-								if ((de->entries[j].type == 0) && (!strcmp(de->entries[j].name, searchPath))) {
+								char *dname = getName(de->entries[j]);
+								if ((de->entries[j].type == 0) && (!strcmp(dname, searchPath))) {
+									free(dname);
 									// If match found, overwrite current dnode
 
 									block->block = de->entries[j].block.block;
@@ -2738,6 +2757,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 										return 0;
 									}
 								}
+								free(dname);
 							}
 						}
 						dirent_free(de);
@@ -2787,7 +2807,8 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
-					if (!strcmp(name, de->entries[j].name)) {
+					char *dname = getName(de->entries[j]);
+					if (!strcmp(name, dname)) {
 						// Found it!
 						dir = de->entries[j];
 
@@ -2830,11 +2851,12 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 							bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
 						}
 						else if (renameFlag) {
-							strcpy(de->entries[j].name, newName);
+							strcpy(dname, newName);
 							bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
 						}
 
 						dirent_free(de);
+						free(dname);
 
 						if (dir.type == 0) {
 							// If the dirent is for a directory
@@ -2845,6 +2867,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 							return 1;
 						}
 					}
+					free(dname);
 				}
 			}
 
@@ -2870,7 +2893,8 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 					// j = direntry entry
 					if (de->entries[j].block.valid) {
 						count++;
-						if (!strcmp(de->entries[j].name, name)) {
+						char *dname = getName(de->entries[j]);
+						if (!strcmp(dname, name)) {
 							// Found it!
 							dir = de->entries[j];
 							indirect_free(ind);
@@ -2935,11 +2959,12 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 								bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
 							}
 							else if (renameFlag) {
-								strcpy(de->entries[j].name, newName);
+								strcpy(dname, newName);
 								bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
 							}
 
 							dirent_free(de);
+							free(dname);
 
 							if (dir.type == 0) {
 								// If the dirent is for a directory
@@ -2950,6 +2975,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 								return 1;
 							}
 						}
+						free(dname);
 					}
 				}
 
@@ -2987,7 +3013,8 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 							// j = direntry entry
 							if (de->entries[j].block.valid) {
 								count++;
-								if (!strcmp(de->entries[j].name, name)) {
+								char *dname = getName(de->entries[j]);
+								if (!strcmp(dname, name)) {
 									// Found it!
 									dir = de->entries[j];
 									indirect_free(firstind);
@@ -3072,11 +3099,12 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 										bufdwrite(directoryBlock, (char *)directory, sizeof(dnode));
 									}
 									else if (renameFlag) {
-										strcpy(de->entries[j].name, newName);
+										strcpy(dname, newName);
 										bufdwrite(directory->direct[i].block, (char *)de, sizeof(dirent));
 									}
 
 									dirent_free(de);
+									free(dname);
 
 									if (dir.type == 0) {
 										// If the dirent is for a directory
@@ -3087,6 +3115,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 										return 1;
 									}
 								}
+								free(dname);
 							}
 						}
 
