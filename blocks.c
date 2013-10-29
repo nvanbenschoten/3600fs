@@ -142,7 +142,7 @@ int bufdread(int blocknum, char * buf, int size) {
     char tmp[BLOCKSIZE];
     memset(tmp, 0, BLOCKSIZE);
 
-    int ret = 0;
+    int ret = 512;
 
     // Deal with cache
     int i;
