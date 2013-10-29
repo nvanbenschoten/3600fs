@@ -269,6 +269,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
     int dnode_block = -1;
     int i = 0, j = 0, ent_b = 0, lvl = 0;
     int dirents = 110;
+    int fr;
     indirect *indr = indirect_create();
     indirect *indr2 = indirect_create();
     dirent *de = dirent_create();
@@ -293,7 +294,21 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                                             // meaning we can use them to write to
                                             strcpy(de->entries[i].name, name); // write to them
                                             de->entries[i].type = 0; // 0 = dir
-                                            de->entries[i].block = blocknum_create(getNextFree(v), 1);
+                                            if ((fr = getNextFree(v)) >= 0) {
+                                                    de->entries[i].block = blocknum_create(fr, 1);
+                                            }
+                                            else {
+                                                    printf("Error: No disk space available.\n");
+                                                    free(d);
+                                                    free(indr);
+                                                    free(indr2);
+                                                    free(de);
+                                                    free(de_new);
+                                                    free(d_new);
+                                                    free(pathcpy);
+                                                    free(name);
+                                                    return -ENOSPC;
+                                            }
                                             dnode_block = de->entries[i].block.block; // set inode
                                             bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
                                             break;
@@ -302,10 +317,38 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                     }
                     else { // we need to use this dirent for our inode
                             // set to valid and make it an actual blocknum cause no guarantees
-                            dbs[ent_b] = blocknum_create(getNextFree(v), 1); // write new blocknum as valid
+                            if ((fr = getNextFree(v)) >= 0) {
+                                    dbs[ent_b] = blocknum_create(fr, 1); // write new blocknum as valid
+                            }
+                            else {
+                                    printf("Error: No disk space available.\n");
+                                    free(d);
+                                    free(indr);
+                                    free(indr2);
+                                    free(de);
+                                    free(de_new);
+                                    free(d_new);
+                                    free(pathcpy);
+                                    free(name);
+                                    return -ENOSPC;
+                            }
                             strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
                             de_new->entries[0].type = 0;
-                            de_new->entries[0].block = blocknum_create(getNextFree(v), 1);
+                            if ((fr = getNextFree(v)) >= 0) {
+                                    de_new->entries[0].block = blocknum_create(fr, 1);
+                            }
+                            else {
+                                    printf("Error: No disk space available.\n");
+                                    free(d);
+                                    free(indr);
+                                    free(indr2);
+                                    free(de);
+                                    free(de_new);
+                                    free(d_new);
+                                    free(pathcpy);
+                                    free(name);
+                                    return -ENOSPC;
+                            }
                             // write dirent
                             bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
                             dnode_block = de_new->entries[0].block.block; // set inode blocknum 
@@ -318,7 +361,21 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                     }
                     else { // need to actually create blocknum etc
                             //d->single_indirect.block = create_blocknum(); 
-                            d->single_indirect = blocknum_create(getNextFree(v), 1);
+                            if ((fr = getNextFree(v)) >= 0) {
+                                    d->single_indirect = blocknum_create(fr, 1);
+                            }
+                            else {
+                                    printf("Error: No disk space available.\n");
+                                    free(d);
+                                    free(indr);
+                                    free(indr2);
+                                    free(de);
+                                    free(de_new);
+                                    free(d_new);
+                                    free(pathcpy);
+                                    free(name);
+                                    return -ENOSPC;
+                            }
                             indr->blocks[0] = blocknum_create(0, 0);
                     }
                     ent_b = 0;
@@ -334,7 +391,21 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                                     bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
                             }
                             else { // need to update both levels
-                                    indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                                    if ((fr = getNextFree(v)) >= 0) {
+                                            indr2->blocks[0] = blocknum_create(fr, 1);
+                                    }
+                                    else {
+                                            printf("Error: No disk space available.\n");
+                                            free(d);
+                                            free(indr);
+                                            free(indr2);
+                                            free(de);
+                                            free(de_new);
+                                            free(d_new);
+                                            free(pathcpy);
+                                            free(name);
+                                            return -ENOSPC;
+                                    }
                                     free(indr);
                                     indr = indirect_create();
                                     indr->blocks[0] = blocknum_create(0, 0);
@@ -342,8 +413,36 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                             }
                     }
                     else { // not valid so need to setup 1st and 2nd levels
-                            d->double_indirect = blocknum_create(getNextFree(v), 1);
-                            indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                            if ((fr = getNextFree(v)) >= 0) {
+                                    d->double_indirect = blocknum_create(fr, 1);
+                            }
+                            else {
+                                    printf("Error: No disk space available.\n");
+                                    free(d);
+                                    free(indr);
+                                    free(indr2);
+                                    free(de);
+                                    free(de_new);
+                                    free(d_new);
+                                    free(pathcpy);
+                                    free(name);
+                                    return -ENOSPC;
+                            }
+                            if ((fr = getNextFree(v)) >= 0) {
+                                    indr2->blocks[0] = blocknum_create(fr, 1);
+                            }
+                            else {
+                                    printf("Error: No disk space available.\n");
+                                    free(d);
+                                    free(indr);
+                                    free(indr2);
+                                    free(de);
+                                    free(de_new);
+                                    free(d_new);
+                                    free(pathcpy);
+                                    free(name);
+                                    return -ENOSPC;
+                            }
                             free(indr);
                             indr = indirect_create();
                             indr->blocks[0] = blocknum_create(0, 0);
@@ -362,7 +461,21 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                                     bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                             }
                             else { // need to setup blank indr
-                                    indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                    if ((fr = getNextFree(v)) >= 0) {
+                                            indr2->blocks[j] = blocknum_create(fr, 1);
+                                    }
+                                    else {
+                                            printf("Error: No disk space available.\n");
+                                            free(d);
+                                            free(indr);
+                                            free(indr2);
+                                            free(de);
+                                            free(de_new);
+                                            free(d_new);
+                                            free(pathcpy);
+                                            free(name);
+                                            return -ENOSPC;
+                                    }
                                     free(indr);
                                     indr = indirect_create();
                                     indr->blocks[0] = blocknum_create(0, 0);
@@ -384,10 +497,10 @@ static int vfs_mkdir(const char *path, mode_t mode) {
                     free(de);
                     free(de_new);
                     free(d_new);
+                    free(pathcpy);
+		    free(name);
                     // error
                     printf("Error no directory entry available to create file.\n");
-                    free(pathcpy);
-					free(name);
                     return -1;
             }
     }
@@ -397,7 +510,21 @@ static int vfs_mkdir(const char *path, mode_t mode) {
     
 
     // New directory dirent
-    d_new->direct[0] = blocknum_create(getNextFree(v), 1);
+    if ((fr = getNextFree(v)) >= 0) {
+            d_new->direct[0] = blocknum_create(fr, 1);
+    }
+    else {
+            printf("Error: No disk space available.\n");
+            free(d);
+            free(indr);
+            free(indr2);
+            free(de);
+            free(de_new);
+            free(d_new);
+            free(pathcpy);
+            free(name);
+            return -ENOSPC;
+    }
     dirent * de_in = dirent_create();
     de_in->entries[0] = direntry_create(".", 0, blocknum_create(dnode_block, 1));
     de_in->entries[1] = direntry_create("..", 0, blocknum_create(dirBlock.block, 1));
@@ -693,6 +820,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	dnode * temp_d = dnode_create(0, 0, 0, 0);
 	inode * temp_i = inode_create(0, 0, 0, 0);
 	blocknum block;
+        int fr;
 	int ret = getNODE(d, name, temp_d, temp_i, &block, 0, 0, 0, "");
 	if (ret >= 0) {
 		// COMMENT Made it so it file or dir match, it returns
@@ -737,7 +865,21 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                                 // meaning we can use them to write to
                                                 strcpy(de->entries[i].name, name); // write to them
                                                 de->entries[i].type = 1; // 1 = file
-                                                de->entries[i].block = blocknum_create(getNextFree(v), 1);
+                                                if ((fr = getNextFree(v)) >= 0) {
+                                                        de->entries[i].block = blocknum_create(fr, 1);
+                                                }
+                                                else {
+                                                        printf("Error: No disk space available.\n");
+                                                        free(d);
+                                                        free(indr);
+                                                        free(indr2);
+                                                        free(de);
+                                                        free(de_new);
+                                                        free(i_new);
+                                                        free(pathcpy);
+                                                        free(name);
+                                                        return -ENOSPC;
+                                                }
                                                 inode_block = de->entries[i].block.block; // set inode
                                                 bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
                                                 break;
@@ -746,10 +888,38 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         }
                         else { // we need to use this dirent for our inode
                                 // set to valid and make it an actual blocknum cause no guarantees
-                                dbs[ent_b] = blocknum_create(getNextFree(v), 1); // write new blocknum as valid
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        dbs[ent_b] = blocknum_create(fr, 1); // write new blocknum as valid
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        free(d);
+                                        free(indr);
+                                        free(indr2);
+                                        free(de);
+                                        free(de_new);
+                                        free(i_new);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
                                 strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
                                 de_new->entries[0].type = 1;
-                                de_new->entries[0].block = blocknum_create(getNextFree(v), 1);
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        de_new->entries[0].block = blocknum_create(fr, 1);
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        free(d);
+                                        free(indr);
+                                        free(indr2);
+                                        free(de);
+                                        free(de_new);
+                                        free(i_new);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
                                 // write dirent
                                 bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
                                 inode_block = de_new->entries[0].block.block; // set inode blocknum 
@@ -762,7 +932,21 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         }
                         else { // need to actually create blocknum etc
                                 //d->single_indirect.block = create_blocknum(); 
-                                d->single_indirect = blocknum_create(getNextFree(v), 1);
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        d->single_indirect = blocknum_create(fr, 1);
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        free(d);
+                                        free(indr);
+                                        free(indr2);
+                                        free(de);
+                                        free(de_new);
+                                        free(i_new);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
                                 indr->blocks[0] = blocknum_create(0, 0);
                         }
                         ent_b = 0;
@@ -778,7 +962,21 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                         bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
                                 }
                                 else { // need to update both levels
-                                        indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                                        if ((fr = getNextFree(v)) >= 0) {
+                                                indr2->blocks[0] = blocknum_create(fr, 1);
+                                        }
+                                        else {
+                                                printf("Error: No disk space available.\n");
+                                                free(d);
+                                                free(indr);
+                                                free(indr2);
+                                                free(de);
+                                                free(de_new);
+                                                free(i_new);
+                                                free(pathcpy);
+                                                free(name);
+                                                return -ENOSPC;
+                                        }
                                         free(indr);
                                         indr = indirect_create();
                                         indr->blocks[0] = blocknum_create(0, 0);
@@ -786,8 +984,36 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                 }
                         }
                         else { // not valid so need to setup 1st and 2nd levels
-                                d->double_indirect = blocknum_create(getNextFree(v), 1);
-                                indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        d->double_indirect = blocknum_create(fr, 1);
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        free(d);
+                                        free(indr);
+                                        free(indr2);
+                                        free(de);
+                                        free(de_new);
+                                        free(i_new);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        indr2->blocks[0] = blocknum_create(fr, 1);
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        free(d);
+                                        free(indr);
+                                        free(indr2);
+                                        free(de);
+                                        free(de_new);
+                                        free(i_new);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
                                 free(indr);
                                 indr = indirect_create();
                                 indr->blocks[0] = blocknum_create(0, 0);
@@ -806,7 +1032,21 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                                         bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                                 }
                                 else { // need to setup blank indr
-                                        indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                        if ((fr = getNextFree(v)) >= 0) {
+                                                indr2->blocks[j] = blocknum_create(fr, 1);
+                                        }
+                                        else {
+                                                printf("Error: No disk space available.\n");
+                                                free(d);
+                                                free(indr);
+                                                free(indr2);
+                                                free(de);
+                                                free(de_new);
+                                                free(i_new);
+                                                free(pathcpy);
+                                                free(name);
+                                                return -ENOSPC;
+                                        }
                                         free(indr);
                                         indr = indirect_create();
                                         indr->blocks[0] = blocknum_create(0, 0);
@@ -828,10 +1068,10 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                         free(de);
                         free(de_new);
                         free(i_new);
+                        free(pathcpy);
+			free(name);
                         // error
                         printf("Error no directory entry available to create file.\n");
-                        free(pathcpy);
-						free(name);
                         return -1;
                 }
         }
@@ -1258,6 +1498,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         indirect *indr2 = indirect_create();
         int cur_b = 0, blocks_write = 110;
         int j = 0, lvl = 0, i = 0;
+        int fr;
         blocknum * dbs;
         unsigned int usable_offset;
 
@@ -1314,7 +1555,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         else {
                 // TODO should this be -ENOSPC ???
                 printf("Error: File offset too large, file size not supported\n");
-                return -1;
+                return -ENOSPC;
         }
 
         // write data blocks
@@ -1331,8 +1572,19 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                 }
                         }
                         else { // otherwise need to get a free block to write to
-                                dbs[cur_b] = blocknum_create(getNextFree(v), 1);
-                                // TODO: check for getnextfree returning an error and handle that
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        dbs[cur_b] = blocknum_create(getNextFree(v), 1);
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        dnode_free(d);
+                                        inode_free(i_node);
+                                        indirect_free(indr);
+                                        indirect_free(indr2);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
                         }
 
                         if (usable_offset + written < offset) { // if we need to write zeroes
@@ -1380,7 +1632,19 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                 bufdread(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
                         }
                         else { // need to set blocks and write for new indirect
-                                i_node->single_indirect = blocknum_create(getNextFree(v), 1);
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        i_node->single_indirect = blocknum_create(fr, 1);
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        dnode_free(d);
+                                        inode_free(i_node);
+                                        indirect_free(indr);
+                                        indirect_free(indr2);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
                                 indr->blocks[0] = blocknum_create(0, 0);
                                 // TODO: once again check getNextFree
                         }
@@ -1402,7 +1666,20 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                         bufdread(indr2->blocks[0].block ,(char *) indr, sizeof(indirect));
                                 }
                                 else {
-                                        indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                                        if ((fr = getNextFree(v)) >= 0) {
+                                                indr2->blocks[0] = blocknum_create(fr, 1);
+                                        }
+                                        else {
+                                                printf("Error: No disk space available.\n");
+                                                dnode_free(d);
+                                                inode_free(i_node);
+                                                indirect_free(indr);
+                                                indirect_free(indr2);
+                                                free(pathcpy);
+                                                free(name);
+                                                return -ENOSPC;
+                                        }
+
                                         free(indr);
                                         indr = indirect_create();
                                         for (i = 0; i < 128; i++) {
@@ -1412,9 +1689,34 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                                 }
                         }
                         else {
-                                i_node->double_indirect = blocknum_create(getNextFree(v), 1);
-                                // TODO: check validity of free blocks everywhere
-                                indr2->blocks[0] = blocknum_create(getNextFree(v), 1);
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        i_node->double_indirect = blocknum_create(fr, 1);
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        dnode_free(d);
+                                        inode_free(i_node);
+                                        indirect_free(indr);
+                                        indirect_free(indr2);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
+
+                                if ((fr = getNextFree(v)) >= 0) {
+                                        indr2->blocks[0] = blocknum_create(fr, 1);
+                                }
+                                else {
+                                        printf("Error: No disk space available.\n");
+                                        dnode_free(d);
+                                        inode_free(i_node);
+                                        indirect_free(indr);
+                                        indirect_free(indr2);
+                                        free(pathcpy);
+                                        free(name);
+                                        return -ENOSPC;
+                                }
+
                                 free(indr);
                                 indr = indirect_create();
                                 for (i = 0; i < 128; i++) {
@@ -1435,17 +1737,26 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                         }
                         bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 
-                        //if (j == 0) { // TODO fix this monstrosity
                         j++;
-                        //}
 
                         if (j < 128) {
                                 if (indr2->blocks[j].valid) { // if we have an existing single indirect to use
-                                        // TODO maybe need to free and write indr before this
                                         bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
                                 }
                                 else {
-                                        indr2->blocks[j] = blocknum_create(getNextFree(v), 1);
+                                        if ((fr = getNextFree(v)) >= 0) {
+                                                indr2->blocks[j] = blocknum_create(fr, 1);
+                                        }
+                                        else {
+                                                printf("Error: No disk space available.\n");
+                                                dnode_free(d);
+                                                inode_free(i_node);
+                                                indirect_free(indr);
+                                                indirect_free(indr2);
+                                                free(pathcpy);
+                                                free(name);
+                                                return -ENOSPC;
+                                        }
                                         free(indr);
                                         indr = indirect_create();
                                         for (i = 0; i < 128; i++) {
@@ -1465,7 +1776,12 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                 else { // no room so need to error and free etc.
                         // write level 2 indirect block
                         bufdwrite(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-
+                        dnode_free(d);
+                        inode_free(i_node);
+                        indirect_free(indr);
+                        indirect_free(indr2);
+                        free(pathcpy);
+                        free(name);
                         return -ENOSPC;
                 }
         }
