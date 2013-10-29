@@ -122,6 +122,7 @@ void freeblock_free(freeblock *s);
 void disk_crash();
 int bufdread(int blocknum, char * buf, int size);
 int bufdwrite(int blocknum, const char * buf, int size);
+void initCache();
 
 // File system specific helper functions
 int seperatePathAndName(char *path, char *name);
