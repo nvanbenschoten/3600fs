@@ -156,7 +156,7 @@ int bufdread(int blocknum, char * buf, int size) {
 
             int j;
             for (j = 0; j < 10; j++) {
-                if (j != i)
+                if (j != i && cacheOrder[j] < cacheOrder[i])
                     cacheOrder[j]++;
             }
 
@@ -187,7 +187,7 @@ int bufdread(int blocknum, char * buf, int size) {
 
         int k = 0;
         for (k = 0; k < 10; k++) {
-            if (k != j)
+            if (k != j && cacheOrder[k] < cacheOrder[j])
                 cacheOrder[k]++;
         }
     }
