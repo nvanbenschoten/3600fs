@@ -2,9 +2,9 @@
 
 const int DISKNUMBER = 13371337;
 
-blocknum cacheBlockNum [10];
-char cacheBlock [10*512];
-int cacheOrder [10] = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+blocknum cacheBlockNum [100];
+char cacheBlock [100*512];
+int cacheOrder [100];
 
 // Constructors
 blocknum blocknum_create(int num, unsigned int valid) {
@@ -147,13 +147,13 @@ int bufdread(int blocknum, char * buf, int size) {
     // Deal with cache
     int i;
     int hit = 0;
-    for(i = 0; i < 10; i++) {
+    for(i = 0; i < 100; i++) {
         if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum) {
             // Hit
             memcpy(buf, &cacheBlock[i*512], size);
 
             int j;
-            for (j = 0; j < 10; j++) {
+            for (j = 0; j < 100; j++) {
                 if (j != i && cacheOrder[j] < cacheOrder[i])
                     cacheOrder[j]++;
             }
@@ -175,7 +175,7 @@ int bufdread(int blocknum, char * buf, int size) {
 
         // Add to cache
         int j = 0;
-        while(cacheOrder[j] != 9) {
+        while(cacheOrder[j] != 99) {
             j++;
         }
 
@@ -184,7 +184,7 @@ int bufdread(int blocknum, char * buf, int size) {
         cacheBlockNum[j] = blocknum_create(blocknum, 1);
 
         int k = 0;
-        for (k = 0; k < 10; k++) {
+        for (k = 0; k < 100; k++) {
             if (k != j && cacheOrder[k] < cacheOrder[j])
                 cacheOrder[k]++;
         }
@@ -205,7 +205,7 @@ int bufdwrite(int blocknum, const char * buf, int size) {
         disk_crash();
 
     int i;
-    for(i = 0; i < 10; i++) {
+    for(i = 0; i < 100; i++) {
         if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum) {
             // Hit
             memcpy(&cacheBlock[i*512], buf, size);
@@ -214,4 +214,10 @@ int bufdwrite(int blocknum, const char * buf, int size) {
     }
 
     return ret;
+}
+
+void initCache() {
+    int i;
+    for (i = 0; i < 100; i++)
+        cacheOrder[i] = 99 - i;
 }
