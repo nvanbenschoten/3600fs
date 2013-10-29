@@ -150,7 +150,7 @@ int bufdread(int blocknum, char * buf, int size) {
     for(i = 0; i < 10; i++) {
         if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum) {
             // Hit
-            memcpy(buf, cacheBlock[i*512], size);
+            memcpy(buf, &cacheBlock[i*512], size);
 
             cacheOrder[i] = 0;
 
