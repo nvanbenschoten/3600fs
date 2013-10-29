@@ -152,13 +152,13 @@ int bufdread(int blocknum, char * buf, int size) {
             // Hit
             memcpy(buf, &cacheBlock[i*512], size);
 
-            cacheOrder[i] = 0;
-
             int j;
             for (j = 0; j < 10; j++) {
                 if (j != i && cacheOrder[j] < cacheOrder[i])
                     cacheOrder[j]++;
             }
+
+            cacheOrder[i] = 0;
 
             hit = 1;
             break;
@@ -183,13 +183,13 @@ int bufdread(int blocknum, char * buf, int size) {
 
         cacheBlockNum[j] = blocknum_create(blocknum, 1);
 
-        cacheOrder[j] = 0;
-
         int k = 0;
         for (k = 0; k < 10; k++) {
             if (k != j && cacheOrder[k] < cacheOrder[j])
                 cacheOrder[k]++;
         }
+
+        cacheOrder[j] = 0;
     }
 
     return ret;
