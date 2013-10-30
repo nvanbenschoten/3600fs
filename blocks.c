@@ -1,11 +1,13 @@
 #include "3600fs.h"
 
+#define CACHE_SIZE 100
+
 const int DISKNUMBER = 13371337;
 
 // Cache!!!
-blocknum cacheBlockNum [100];
-char cacheBlock [100*512];
-int cacheOrder [100];
+blocknum cacheBlockNum [CACHE_SIZE];
+char cacheBlock [CACHE_SIZE*BLOCKSIZE];
+int cacheOrder [CACHE_SIZE];
 
 // Constructors
 blocknum blocknum_create(int num, unsigned int valid) {
@@ -25,8 +27,8 @@ vcb *vcb_create(int magic, char *name) {
     s->magic = magic;
     s->blocksize = BLOCKSIZE;
 
-    strncpy(s->name, name, 496);
-    s->name[495] = '\0';
+    strncpy(s->name, name, 491);
+    s->name[490] = '\0';
 
     return s;
 }
@@ -55,8 +57,7 @@ indirect *indirect_create() {
 direntry direntry_create(char * name, char type, blocknum block) {
     direntry s;
 
-    strncpy(s.name, name, 26);
-    s.name[26] = '\0';
+    setName(&s, name);
     s.type = type;
     s.block = block;
 
@@ -157,18 +158,18 @@ int bufdread(int blocknum, char * buf, int size) {
     char tmp[BLOCKSIZE];
     memset(tmp, 0, BLOCKSIZE);
 
-    int ret = 512;
+    int ret = BLOCKSIZE;
 
     // Deal with cache
     int i;
     int hit = 0;
-    for(i = 0; i < 100; i++) {
+    for(i = 0; i < CACHE_SIZE; i++) {
         if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum) {
             // Hit
-            memcpy(buf, &cacheBlock[i*512], size);
+            memcpy(buf, &cacheBlock[i*BLOCKSIZE], size);
 
             int j;
-            for (j = 0; j < 100; j++) {
+            for (j = 0; j < CACHE_SIZE; j++) {
                 if (j != i && cacheOrder[j] < cacheOrder[i])
                     cacheOrder[j]++;
             }
@@ -190,16 +191,16 @@ int bufdread(int blocknum, char * buf, int size) {
 
         // Add to cache
         int j = 0;
-        while(cacheOrder[j] != 99) {
+        while(cacheOrder[j] != CACHE_SIZE-1) {
             j++;
         }
 
-        memcpy(&cacheBlock[j*512], buf, size);
+        memcpy(&cacheBlock[j*BLOCKSIZE], buf, size);
 
         cacheBlockNum[j] = blocknum_create(blocknum, 1);
 
         int k = 0;
-        for (k = 0; k < 100; k++) {
+        for (k = 0; k < CACHE_SIZE; k++) {
             if (k != j && cacheOrder[k] < cacheOrder[j])
                 cacheOrder[k]++;
         }
@@ -220,10 +221,10 @@ int bufdwrite(int blocknum, const char * buf, int size) {
         disk_crash();
 
     int i;
-    for(i = 0; i < 100; i++) {
+    for(i = 0; i < CACHE_SIZE; i++) {
         if (cacheBlockNum[i].valid && cacheBlockNum[i].block == blocknum) {
             // Hit
-            memcpy(&cacheBlock[i*512], buf, size);
+            memcpy(&cacheBlock[i*BLOCKSIZE], buf, size);
             break;
         }
     }
@@ -233,6 +234,6 @@ int bufdwrite(int blocknum, const char * buf, int size) {
 
 void initCache() {
     int i;
-    for (i = 0; i < 100; i++)
-        cacheOrder[i] = 99 - i;
+    for (i = 0; i < CACHE_SIZE; i++)
+        cacheOrder[i] = CACHE_SIZE - 1 - i;
 }
