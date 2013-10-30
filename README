@@ -66,10 +66,10 @@ vfs_create
 When creating a new file, we first had to locate where the inode should be stored. To do this, we first sperated the path string into the directory and the new file name using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function to find the parent directory. Next, we use our getNODE() function to make sure the inode doesnt already exist. From here, we find the first available free direntry in the parent dnode and write our new blockNum to it. We then wrote a new inode to this blocknum on disk. 
 
 vfs_read
-TODO
+When reading a file we first calculate the block to start reading in and check whether the offset given is actually valid. We then work from that point, copying data from the blocks and switching levels of indirection as needed. To do this we maintain a list of blocks to be read and switch indirection levels when that list has all been read through.
 
 vfs_write
-TODO
+When writing data to a file, we first calculate the block to start writing data. We then use a main loop that goes through the file as needed, writing the data and switching levels of indirection. This loop actually starts at the end of the current file, and writes all zeroes until it gets to the offset requested by write. From there it copies over the requested data using a similar method to read.
 
 vfs_delete
 When deleting an inode, we first had to locate the file. To do this, we first sperated the path string into the directory and the filename using our seperatePathAndName() function. After this, we found the inode using our findDNODE() function. By setting the delete flag with this function, the direntry and the corresponding dirents and indirects were cleaned up in the parent directory. Next, we used the resturned inode and its returned blockNum to free all data blocks, and then free the inode block itself. 
