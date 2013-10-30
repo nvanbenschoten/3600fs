@@ -184,7 +184,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		stbuf->st_mtime   = matchd->modify_time.tv_sec; // modify time
 		stbuf->st_ctime   = matchd->create_time.tv_sec; // create time
 		stbuf->st_size    = matchd->size; // directory size
-		stbuf->st_blocks  = (matchd->size + 16 - 1)/(16); // directory size in blocks
+		stbuf->st_blocks  = (matchd->size + DIRENT_NUN - 1)/(DIRENT_NUN); // directory size in blocks
 	}
 	else if (ret == 1) {
 		// If the dirent is for a file
@@ -286,7 +286,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 	// while we havent found a dirent
 	int dnode_block = -1;
 	int i = 0, j = 0, ent_b = 0, lvl = 0;
-	int dirents = 110;
+	int dirents = DIRECTS;
 	int fr;
 	indirect *indr = indirect_create();
 	indirect *indr2 = indirect_create();
@@ -307,7 +307,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 		if (ent_b < dirents) { // if we have more dirents to look through
 			if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
 				bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
-				for (i = 0; i < 16; i++) { // look through the direntries
+				for (i = 0; i < DIRENT_NUN; i++) { // look through the direntries
 					if (!de->entries[i].block.valid) { // if any of the entries are invalid
 						// meaning we can use them to write to
 						//strcpy(de->entries[i].name, name); 
@@ -398,7 +398,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 				indr->blocks[0] = blocknum_create(0, 0);
 			}
 			ent_b = 0;
-			dirents = 128;
+			dirents = INDIRECTS;
 			dbs = indr->blocks;
 			lvl++;
 		}
@@ -468,13 +468,13 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 			}
 			ent_b = 0;
 			j = 0;
-			dirents = 128;
+			dirents = INDIRECTS;
 			dbs = indr->blocks;
 			lvl++;
 		}
 		else if (lvl == 2) { // else we are already in second level of indirection
 				j++;
-				if (j < 128) { // if there are still indirects to check
+				if (j < INDIRECTS) { // if there are still indirects to check
 					if (indr2->blocks[j].valid) { // if next first level indirect is usable
 						bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 					}
@@ -500,7 +500,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 						bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 					}
 					ent_b = 0;
-					dirents = 128;
+					dirents = INDIRECTS;
 					dbs = indr->blocks;
 				}
 				else { // we have run out of indirection space
@@ -644,15 +644,15 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	// Check in directs
 	unsigned int count = offset;
-	while (count < 110*16) {
+	while (count < DIRECTS*DIRENT_NUN) {
 
-		if (d->direct[count/16].valid) {
+		if (d->direct[count/DIRENT_NUN].valid) {
 
 			dirent *de = dirent_create();
-			bufdread(d->direct[count/16].block, (char *)de, sizeof(dirent));
+			bufdread(d->direct[count/DIRENT_NUN].block, (char *)de, sizeof(dirent));
 
 			int j;
-			for (j = count%16; j < 16; j++) {
+			for (j = count%DIRENT_NUN; j < DIRENT_NUN; j++) {
 				// j = direntry entry
 				count++;
 				if (de->entries[j].block.valid) {
@@ -672,7 +672,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			dirent_free(de);
 		}
 		else {
-			count += 16;
+			count += DIRENT_NUN;
 		}
 	}
 
@@ -680,15 +680,15 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	if (d->single_indirect.valid) {
 		indirect *ind = indirect_create();
 		bufdread(d->single_indirect.block, (char *)ind, sizeof(indirect));
-		while(count < 128*16+110*16) {
+		while(count < INDIRECTS*DIRENT_NUN+DIRECTS*DIRENT_NUN) {
 
-			if (ind->blocks[(count-110*16)/16].valid) {
+			if (ind->blocks[(count-DIRECTS*DIRENT_NUN)/DIRENT_NUN].valid) {
 
 				dirent *de = dirent_create();
-				bufdread(ind->blocks[(count-110*16)/16].block, (char *)de, sizeof(dirent));
+				bufdread(ind->blocks[(count-DIRECTS*DIRENT_NUN)/DIRENT_NUN].block, (char *)de, sizeof(dirent));
 
 				int j;
-				for (j = count%16; j < 16; j++) {
+				for (j = count%DIRENT_NUN; j < DIRENT_NUN; j++) {
 					// j = direntry entry
 					count++;
 					if (de->entries[j].block.valid) {
@@ -709,14 +709,14 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 				dirent_free(de);
 			}
 			else {
-				count += 16;
+				count += DIRENT_NUN;
 			}
 		}
 		
 		indirect_free(ind);
 	}
 	else {
-		count += 128*16;
+		count += INDIRECTS*DIRENT_NUN;
 	}
 
 	// Double indirection
@@ -724,18 +724,18 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 		indirect *firstind = indirect_create();
 		bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
-		while(count < 128*128*16+128*16+110*16) {
+		while(count < INDIRECTS*INDIRECTS*DIRENT_NUN+INDIRECTS*DIRENT_NUN+DIRECTS*DIRENT_NUN) {
 			// While below limit of direct, first indirect, and second indirect
 			
-			if (firstind->blocks[(count-110*16-128*16)/(16*128)].valid) {
+			if (firstind->blocks[(count-DIRECTS*DIRENT_NUN-INDIRECTS*DIRENT_NUN)/(DIRENT_NUN*INDIRECTS)].valid) {
 				// If first indirect is valid
 
 				// Read in second indirect
 				indirect *secind = indirect_create();
-				bufdread(firstind->blocks[(count-110*16-128*16)/(16*128)].block, (char *)secind, sizeof(indirect));
+				bufdread(firstind->blocks[(count-DIRECTS*DIRENT_NUN-INDIRECTS*DIRENT_NUN)/(DIRENT_NUN*INDIRECTS)].block, (char *)secind, sizeof(indirect));
 
 				int k;
-				for (k = (count-110*16-128*16)/16; k < 128; k++) {
+				for (k = (count-DIRECTS*DIRENT_NUN-INDIRECTS*DIRENT_NUN)/DIRENT_NUN; k < INDIRECTS; k++) {
 					// K is equal to the index in the second indirect block
 
 					if (secind->blocks[k].valid) {
@@ -744,7 +744,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
-						for (j = (count-110*16-128*16)%16; j < 16; j++) {
+						for (j = (count-DIRECTS*DIRENT_NUN-INDIRECTS*DIRENT_NUN)%DIRENT_NUN; j < DIRENT_NUN; j++) {
 							// j = direntry entry
 							count++;
 							if (de->entries[j].block.valid) {
@@ -766,20 +766,20 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 						dirent_free(de);
 					}
 					else {
-						count += 16;
+						count += DIRENT_NUN;
 					}
 				}
 
 				indirect_free(secind);
 			}
 			else {
-				count += 128*16;
+				count += INDIRECTS*DIRENT_NUN;
 			}
 		}
 		indirect_free(firstind);
 	}
 	else {
-		count += 128*128*16;
+		count += INDIRECTS*INDIRECTS*DIRENT_NUN;
 	}
 
 	dnode_free(d);
@@ -861,7 +861,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	// while we havent found a dirent
 	int inode_block = -1;
 	int i = 0, j = 0, ent_b = 0, lvl = 0;
-	int dirents = 110;
+	int dirents = DIRECTS;
 	indirect *indr = indirect_create();
 	indirect *indr2 = indirect_create();
 	dirent *de = dirent_create();
@@ -881,7 +881,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		if (ent_b < dirents) { // if we have more dirents to look through
 			if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
 				bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
-				for (i = 0; i < 16; i++) { // look through the direntries
+				for (i = 0; i < DIRENT_NUN; i++) { // look through the direntries
 					if (!de->entries[i].block.valid) { // if any of the entries are invalid
 						// meaning we can use them to write to
 						setName(&de->entries[i], name); // write to them
@@ -970,7 +970,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 				indr->blocks[0] = blocknum_create(0, 0);
 			}
 			ent_b = 0;
-			dirents = 128;
+			dirents = INDIRECTS;
 			dbs = indr->blocks;
 			lvl++;
 		}
@@ -1040,13 +1040,13 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 			}
 			ent_b = 0;
 			j = 0;
-			dirents = 128;
+			dirents = INDIRECTS;
 			dbs = indr->blocks;
 			lvl++;
 		}
 		else if (lvl == 2) { // we need to move within the second indirect entries
 			j++;
-			if (j != 128) {
+			if (j != INDIRECTS) {
 				if (indr2->blocks[j].valid) {
 					bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 				}
@@ -1072,7 +1072,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 					bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 				}
 				ent_b = 0;
-				dirents = 128;
+				dirents = INDIRECTS;
 				dbs = indr->blocks;
 			}
 			else {
@@ -1219,23 +1219,23 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 	char tmp[sizeof(db)];
 	indirect *indr = indirect_create();
 	indirect *indr2 = indirect_create();
-	int cur_b = 0, blocks_read = 110;
+	int cur_b = 0, blocks_read = DIRECTS;
 	int j = 0, lvl = 0;
 	blocknum * dbs;
 
 	
 	// calculate the starting block to look in and get dbs, set j, and set lvl accordingly
-	if (blocks < 110) { // in normal direct blocks
+	if (blocks < DIRECTS) { // in normal direct blocks
 		dbs = i_node->direct; 
 		cur_b = blocks;
 	}
-	else if (blocks >= 110 && blocks < 238) { // need to look in single indirects
+	else if (blocks >= DIRECTS && blocks < 238) { // need to look in single indirects
 		lvl++;
 		if (i_node->single_indirect.valid) {
 			bufdread(i_node->single_indirect.block, (char*) indr, sizeof(indirect));
 			dbs = indr->blocks;
-			cur_b = blocks - 110;
-			blocks_read = 128;
+			cur_b = blocks - DIRECTS;
+			blocks_read = INDIRECTS;
 		}
 		else { // free and return
 			inode_free(i_node);
@@ -1249,17 +1249,17 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 			return -1;
 		}
 	}
-	else if (blocks < 16622) { // need to look in double indirects
+	else if (blocks < DIRENT_NUN622) { // need to look in double indirects
 		lvl++; // \    / |_| \ /
 		lvl++; //  \/\/  | |  |
 		if (i_node->double_indirect.valid) {
 			bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-			j = (blocks - 238) / 128;
+			j = (blocks - 238) / INDIRECTS;
 			if (indr2->blocks[j].valid) {
 				bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 				dbs = indr->blocks;
-				cur_b = blocks - 238 - (j*128);
-				blocks_read = 128;
+				cur_b = blocks - 238 - (j*INDIRECTS);
+				blocks_read = INDIRECTS;
 			}
 			else { // free and return
 				inode_free(i_node);
@@ -1333,7 +1333,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 				bufdread(i_node->single_indirect.block, (char*) indr, sizeof(indirect));
 				dbs = indr->blocks;
 				cur_b = 0;
-				blocks_read = 128;
+				blocks_read = INDIRECTS;
 			}
 			else { // free and return
 				inode_free(i_node);
@@ -1356,7 +1356,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 					bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 					dbs = indr->blocks;
 					cur_b = 0;
-					blocks_read = 128;
+					blocks_read = INDIRECTS;
 					j++;
 				}
 				else { // free and return
@@ -1384,12 +1384,12 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 		}
 		// if need to move within double indirect
 		else if (lvl == 2) { // if we need to move within indirection levels 
-			if (j < 128 && indr2->blocks[j].valid) {
+			if (j < INDIRECTS && indr2->blocks[j].valid) {
 				if (indr2->blocks[j].valid) {
 					bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 					dbs = indr->blocks;
 					cur_b = 0;
-					blocks_read = 128;
+					blocks_read = INDIRECTS;
 					j++;
 				}
 				else { // free and return
@@ -1503,7 +1503,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	char tmp[sizeof(db)] = {0};
 	indirect *indr = indirect_create();
 	indirect *indr2 = indirect_create();
-	int cur_b = 0, blocks_write = 110;
+	int cur_b = 0, blocks_write = DIRECTS;
 	int j = 0, lvl = 0, i = 0;
 	int fr;
 	blocknum * dbs;
@@ -1523,33 +1523,33 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	}
 
 	// calculate starting blocknum, set cur_b, dbs, lvl, j, etc accordingly
-	if (blocks < 110) { // in normal direct blocks
+	if (blocks < DIRECTS) { // in normal direct blocks
 		dbs = i_node->direct;
 		cur_b = blocks;
 	}
-	else if (blocks >= 110 && blocks < 238) { // in single indirects
+	else if (blocks >= DIRECTS && blocks < 238) { // in single indirects
 		lvl++;
 		if (i_node->single_indirect.valid) {
 			bufdread(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
 			dbs = indr->blocks;
-			cur_b = blocks - 110;
-			blocks_write = 128;
+			cur_b = blocks - DIRECTS;
+			blocks_write = INDIRECTS;
 		}
 		else { // there should never be an else?
 			// free and return???
 		}
 	}
-	else if (blocks < 16622) { // double indirect magic numbers
+	else if (blocks < DIRENT_NUN622) { // double indirect magic numbers
 		lvl++; // these two lines are the best in the program
 		lvl++; // lol
 		if (i_node->double_indirect.valid) {
 			bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-			j = (blocks - 238) / 128;
+			j = (blocks - 238) / INDIRECTS;
 			if (indr2->blocks[j].valid) {
 				bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 				dbs = indr->blocks;
-				cur_b = blocks - 238 - (j * 128);
-				blocks_write = 128;
+				cur_b = blocks - 238 - (j * INDIRECTS);
+				blocks_write = INDIRECTS;
 			}
 			else { // once again an else that should never happen
 			}
@@ -1625,7 +1625,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		else if (lvl == 0) {
 			lvl++;
 			// write current dbs data to inode block 
-			for (i = 0; i < 110; i++) {
+			for (i = 0; i < DIRECTS; i++) {
 				i_node->direct[i] = dbs[i]; 
 			}
 			if (i_node->single_indirect.valid) {
@@ -1650,12 +1650,12 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 			}
 			dbs = indr->blocks;
 			cur_b = 0; 
-			blocks_write = 128;
+			blocks_write = INDIRECTS;
 		}
 		else if (lvl == 1) {
 			lvl++;
 			// write current dbs data to indirect block
-			for (i = 0; i < 128; i++) {
+			for (i = 0; i < INDIRECTS; i++) {
 				indr->blocks[i] = dbs[i];
 			}
 			bufdwrite(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
@@ -1682,7 +1682,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
 					free(indr);
 					indr = indirect_create();
-					for (i = 0; i < 128; i++) {
+					for (i = 0; i < INDIRECTS; i++) {
 						indr->blocks[i] = blocknum_create(0, 0);
 					}
 					bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
@@ -1719,7 +1719,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
 				free(indr);
 				indr = indirect_create();
-				for (i = 0; i < 128; i++) {
+				for (i = 0; i < INDIRECTS; i++) {
 					indr->blocks[i] = blocknum_create(0, 0);
 				}
 				bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
@@ -1727,19 +1727,19 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
 			dbs = indr->blocks;
 			cur_b = 0;
-			blocks_write = 128;
+			blocks_write = INDIRECTS;
 
 		}
 		else if (lvl == 2) {
 			// write current dbs data to finished single indirect
-			for (i = 0; i < 128; i++) {
+			for (i = 0; i < INDIRECTS; i++) {
 				indr->blocks[i] = dbs[i];
 			}
 			bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 
 			j++;
 
-			if (j < 128) {
+			if (j < INDIRECTS) {
 				if (indr2->blocks[j].valid) { // if we have an existing single indirect to use
 					bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 				}
@@ -1759,13 +1759,13 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 					}
 					free(indr);
 					indr = indirect_create();
-					for (i = 0; i < 128; i++) {
+					for (i = 0; i < INDIRECTS; i++) {
 						indr->blocks[i] = blocknum_create(0, 0);
 					}
 					bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 				}
 				cur_b = 0;
-				blocks_write = 128;
+				blocks_write = INDIRECTS;
 				dbs = indr->blocks;
 			}
 			else { // NO ROOM SO CAN ERROR AND FREE OR WHATEVER
@@ -1792,7 +1792,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	switch (lvl) {
 		case 0:
 			// probably dont need this for loop...
-			for (i = 0; i < 110; i++) {
+			for (i = 0; i < DIRECTS; i++) {
 				i_node->direct[i] = dbs[i]; 
 			}
 
@@ -1802,7 +1802,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		case 1:
 			bufdwrite(block.block, (char *) i_node, sizeof(inode));
 			// write current dbs data to indirect block
-			for (i = 0; i < 128; i++) {
+			for (i = 0; i < INDIRECTS; i++) {
 				indr->blocks[i] = dbs[i];
 			}
 			bufdwrite(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
@@ -1811,7 +1811,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
 		case 2:
 			// write current dbs data to finished single indirect
-			for (i = 0; i < 128; i++) {
+			for (i = 0; i < INDIRECTS; i++) {
 				indr->blocks[i] = dbs[i];
 			}
 			bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
@@ -1894,7 +1894,7 @@ static int vfs_delete(const char *path)
 
 	// Frees data blocks
 	int i;
-	for (i = 0; i < 110; i++) {
+	for (i = 0; i < DIRECTS; i++) {
 		// i = direct blocks
 		// Count number of valid while comparing until all are acocunted for
 		if (i_node->direct[i].valid) { 
@@ -1908,7 +1908,7 @@ static int vfs_delete(const char *path)
 		indirect *ind = indirect_create();
 		bufdread(i_node->single_indirect.block, (char *)ind, sizeof(indirect));
 
-		for (i = 0; i < 128; i++) {
+		for (i = 0; i < INDIRECTS; i++) {
 			// i = direct blocks
 			// Count number of valid while comparing until all are acocunted for
 
@@ -1928,7 +1928,7 @@ static int vfs_delete(const char *path)
 		indirect *firstind = indirect_create();
 		bufdread(i_node->double_indirect.block, (char *)firstind, sizeof(indirect));
 		
-		for (i = 0; i < 128; i++) {
+		for (i = 0; i < INDIRECTS; i++) {
 			// i = direct blocks
 			// Count number of valid while comparing until all are acocunted for
 
@@ -1938,7 +1938,7 @@ static int vfs_delete(const char *path)
 				bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
 
 				int k;
-				for (k = 0; k < 128; k++) {
+				for (k = 0; k < INDIRECTS; k++) {
 
 					if (secind->blocks[k].valid) {
 						// Free data here
@@ -2086,7 +2086,7 @@ static int vfs_rename(const char *from, const char *to)
  * This function will change the permissions on the file
  * to be mode.  This should only update the file's mode.  
  * Only the permission bits of mode should be examined 
- * (basically, the last 16 bits).  You should do something like
+ * (basically, the last DIRENT_NUN bits).  You should do something like
  * 
  * fcb->mode = (mode & 0x0000ffff);
  *
@@ -2399,7 +2399,7 @@ static int vfs_truncate(const char *path, off_t offset)
 
 		// Count = to last data block valid
 		unsigned int count = (offset + BLOCKSIZE - 1)/(BLOCKSIZE);
-		while (count < 110) {
+		while (count < DIRECTS) {
 			if (matchi->direct[count].valid) {
 				// If valid and above cutoff point
 				releaseFree(v, matchi->direct[count]);
@@ -2409,17 +2409,17 @@ static int vfs_truncate(const char *path, off_t offset)
 		}
 
 		// Single indirection
-		if (matchi->single_indirect.valid && count < 128+110) {
+		if (matchi->single_indirect.valid && count < INDIRECTS+DIRECTS) {
 			// Will be
-			int deleteInd = (count <= 110);
+			int deleteInd = (count <= DIRECTS);
 
 			indirect *ind = indirect_create();
 			bufdread(matchi->single_indirect.block, (char *)ind, sizeof(indirect));
 
-			while(count < 128+110) {
-				if (ind->blocks[count-110].valid) {
-					releaseFree(v, ind->blocks[count-110]);
-					ind->blocks[count-110].valid = 0;
+			while(count < INDIRECTS+DIRECTS) {
+				if (ind->blocks[count-DIRECTS].valid) {
+					releaseFree(v, ind->blocks[count-DIRECTS]);
+					ind->blocks[count-DIRECTS].valid = 0;
 				}	
 				count++;
 			}
@@ -2434,31 +2434,31 @@ static int vfs_truncate(const char *path, off_t offset)
 			indirect_free(ind);
 		}
 		else {
-			count += 128;
+			count += INDIRECTS;
 		}
 
 		// Double indirection
-		if (matchi->double_indirect.valid && count < 128*128+128+110) {
+		if (matchi->double_indirect.valid && count < INDIRECTS*INDIRECTS+INDIRECTS+DIRECTS) {
 
 			// Will be
-			int deleteFirstInd = (count <= 110+128);
+			int deleteFirstInd = (count <= DIRECTS+INDIRECTS);
 
 			indirect *firstind = indirect_create();
 			bufdread(matchi->double_indirect.block, (char *)firstind, sizeof(indirect));
 
-			while(count < 128*128+128+110) {
+			while(count < INDIRECTS*INDIRECTS+INDIRECTS+DIRECTS) {
 				// While below limit of direct, first indirect, and second indirect
 
-				if (firstind->blocks[(count-110-128)/128].valid) {
+				if (firstind->blocks[(count-DIRECTS-INDIRECTS)/INDIRECTS].valid) {
 					// If first indirect is valid
-					int deleteSecInd = (count <= ((count-110-128)/128)*128 + 110 + 128);
+					int deleteSecInd = (count <= ((count-DIRECTS-INDIRECTS)/INDIRECTS)*INDIRECTS + DIRECTS + INDIRECTS);
 
 					// Read in second indirect
 					indirect *secind = indirect_create();
-					bufdread(firstind->blocks[(count-110-128)/128].block, (char *)secind, sizeof(indirect));
+					bufdread(firstind->blocks[(count-DIRECTS-INDIRECTS)/INDIRECTS].block, (char *)secind, sizeof(indirect));
 
 					int k;
-					for (k = (count-110-128)%128; k < 128; k++) {
+					for (k = (count-DIRECTS-INDIRECTS)%INDIRECTS; k < INDIRECTS; k++) {
 						// K is equal to the index in the second indirect block
 						if (secind->blocks[k].valid) {
 							releaseFree(v, secind->blocks[k]);
@@ -2468,16 +2468,16 @@ static int vfs_truncate(const char *path, off_t offset)
 					}
 
 					if (deleteSecInd) {
-						releaseFree(v, firstind->blocks[(count-110-128)/128 - 1]);
-						firstind->blocks[(count-110-128)/128 - 1].valid = 0;
+						releaseFree(v, firstind->blocks[(count-DIRECTS-INDIRECTS)/INDIRECTS - 1]);
+						firstind->blocks[(count-DIRECTS-INDIRECTS)/INDIRECTS - 1].valid = 0;
 					} else {
-						bufdwrite(firstind->blocks[(count-110-128)/128 - 1].block, (char *)secind, sizeof(indirect));
+						bufdwrite(firstind->blocks[(count-DIRECTS-INDIRECTS)/INDIRECTS - 1].block, (char *)secind, sizeof(indirect));
 					}
 
 					indirect_free(secind);
 				}
 				else {
-					count += 128;
+					count += INDIRECTS;
 				}
 			}
 
@@ -2491,7 +2491,7 @@ static int vfs_truncate(const char *path, off_t offset)
 			indirect_free(firstind);
 		}
 		else {
-			count += 128*128;
+			count += INDIRECTS*INDIRECTS;
 		}
 
 		bufdwrite(block.block, (char *) matchi, sizeof(inode));
@@ -2612,7 +2612,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 
 	// Check in direct
 	unsigned int count = 0;
-	for (i = 0; count < directory->size && i < 110; i++) {
+	for (i = 0; count < directory->size && i < DIRECTS; i++) {
 		// i = direct blocks
 		// Count number of valid while comparing until all are acocunted for
 		if (directory->direct[i].valid) {
@@ -2620,7 +2620,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 			bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 			int j;
-			for (j = 0; count < directory->size && j < 16; j++) {
+			for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
@@ -2659,7 +2659,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 		indirect *ind = indirect_create();
 		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
 
-		for (i = 0; count < directory->size && i < 128; i++) {
+		for (i = 0; count < directory->size && i < INDIRECTS; i++) {
 			// i = direct blocks
 			// Count number of valid while comparing until all are acocunted for
 			if (ind->blocks[i].valid) {
@@ -2668,7 +2668,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 				bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
 
 				int j;
-				for (j = 0; count < directory->size && j < 16; j++) {
+				for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
 					// j = direntry entry
 					if (de->entries[j].block.valid) {
 						count++;
@@ -2711,7 +2711,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 		indirect *firstind = indirect_create();
 		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
 		
-		for (i = 0; count < directory->size && i < 128; i++) {
+		for (i = 0; count < directory->size && i < INDIRECTS; i++) {
 			// i = direct blocks
 			// Count number of valid while comparing until all are acocunted for
 
@@ -2721,13 +2721,13 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 				bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
 
 				int k;
-				for (k = 0; count < directory->size && k < 128; k++) {
+				for (k = 0; count < directory->size && k < INDIRECTS; k++) {
 					if (secind->blocks[k].valid) {
 						dirent *de = dirent_create();
 						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
-						for (j = 0; count < directory->size && j < 16; j++) {
+						for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
 							// j = direntry entry
 							if (de->entries[j].block.valid) {
 								count++;
@@ -2796,7 +2796,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 	// Check in directory
 	int i;
 	unsigned int count = 0;
-	for (i = 0; count < directory->size && i < 110; i++) {
+	for (i = 0; count < directory->size && i < DIRECTS; i++) {
 		// i = direct blocks
 		// Count number of valid while comparing until all are acocunted for
 		if (directory->direct[i].valid) {
@@ -2804,7 +2804,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 			bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 			int j;
-			for (j = 0; count < directory->size && j < 16; j++) {
+			for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
@@ -2831,7 +2831,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 							int l;
 							// Set direntry to invalid
 							de->entries[j].block.valid = 0;
-							for (l = 0; l < 16; l ++) {
+							for (l = 0; l < DIRENT_NUN; l ++) {
 								if (de->entries[l].block.valid) {
 									empty++;
 								}
@@ -2881,7 +2881,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 		indirect *ind = indirect_create();
 		bufdread(directory->single_indirect.block, (char *)ind, sizeof(indirect));
 
-		for (i = 0; count < directory->size && i < 128; i++) {
+		for (i = 0; count < directory->size && i < INDIRECTS; i++) {
 			// Cycles through indirect block
 
 			if (ind->blocks[i].valid) {
@@ -2890,7 +2890,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 				bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
 
 				int j;
-				for (j = 0; count < directory->size && j < 16; j++) {
+				for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
 					// j = direntry entry
 					if (de->entries[j].block.valid) {
 						count++;
@@ -2920,7 +2920,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 								de->entries[j].block.valid = 0;
 
 								// Cycle over dirent to count direntries
-								for (l = 0; l < 16; l ++) {
+								for (l = 0; l < DIRENT_NUN; l ++) {
 									if (de->entries[l].block.valid) {
 										empty++;
 									}
@@ -2934,7 +2934,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 									// Make sure indirect isn't empty
 									int indEmpty = 0;
 									int m;
-									for (m = 0; m < 128; m++) {
+									for (m = 0; m < INDIRECTS; m++) {
 										if (ind->blocks[m].valid) {
 											indEmpty++;
 										}
@@ -2992,7 +2992,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 		indirect *firstind = indirect_create();
 		bufdread(directory->double_indirect.block, (char *)firstind, sizeof(indirect));
 		
-		for (i = 0; count < directory->size && i < 128; i++) {
+		for (i = 0; count < directory->size && i < INDIRECTS; i++) {
 			// i = direct blocks
 			// Count number of valid while comparing until all are acocunted for
 
@@ -3002,7 +3002,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 				bufdread(firstind->blocks[i].block, (char *)secind, sizeof(indirect));
 
 				int k;
-				for (k = 0; count < directory->size && k < 128; k++) {
+				for (k = 0; count < directory->size && k < INDIRECTS; k++) {
 
 					if (secind->blocks[k].valid) {
 
@@ -3010,7 +3010,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
-						for (j = 0; count < directory->size && j < 16; j++) {
+						for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
 							// j = direntry entry
 							if (de->entries[j].block.valid) {
 								count++;
@@ -3040,7 +3040,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 										// Set direntry to invalid
 										de->entries[j].block.valid = 0;
 
-										for (l = 0; l < 16; l ++) {
+										for (l = 0; l < DIRENT_NUN; l ++) {
 											if (de->entries[l].block.valid) {
 												empty++;
 											}
@@ -3054,7 +3054,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 											// Make sure second indirect isn't empty
 											int indEmpty = 0;
 											int m;
-											for (m = 0; m < 128; m++) {
+											for (m = 0; m < INDIRECTS; m++) {
 												if (secind->blocks[m].valid) {
 													indEmpty++;
 												}
@@ -3068,7 +3068,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 												// Make sure second indirect isn't empty
 												int firstindEmpty = 0;
 												int n;
-												for (n = 0; n < 128; n++) {
+												for (n = 0; n < INDIRECTS; n++) {
 													if (firstind->blocks[n].valid) {
 														firstindEmpty++;
 													}
@@ -3211,7 +3211,7 @@ int checkDNODE(dnode *d, int block) {
 	int actual_size = 0;
 	int expected_size = d->size;
 	blocknum *dbs = d->direct;
-	int checked = 0, to_check = 110;
+	int checked = 0, to_check = DIRECTS;
 
 	dirent * de = dirent_create();
 	int i = 0;
@@ -3234,7 +3234,7 @@ int checkDNODE(dnode *d, int block) {
 					disk_status[dbs[checked].block] = 2;
 				}
 				bufdread(dbs[checked].block, (char *) de, sizeof(dirent));
-				for (i = 0; i < 16; i++) {
+				for (i = 0; i < DIRENT_NUN; i++) {
 					if (de->entries[i].block.valid) {
 						if (disk_status[de->entries[i].block.block] == 1) {
 							de->entries[i].block.valid = 0;
@@ -3271,7 +3271,7 @@ int checkDNODE(dnode *d, int block) {
 			checked++;
 		}
 		else if (lvl == 0) { // if we need to make the dbs first indirection level
-			for (k = 0; k < 110; k++) {
+			for (k = 0; k < DIRECTS; k++) {
 				d->direct[k] = dbs[k];
 			}
 
@@ -3283,7 +3283,7 @@ int checkDNODE(dnode *d, int block) {
 					disk_status[d->single_indirect.block] = 2;
 					bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
 					checked = 0;
-					to_check = 128;
+					to_check = INDIRECTS;
 					dbs = indr->blocks;
 				}
 			}
@@ -3291,7 +3291,7 @@ int checkDNODE(dnode *d, int block) {
 		}
 		else if (lvl == 1) { // if we need to make the dbs second indirection level
 			if (j == 0 && d->single_indirect.valid) {
-				for (k = 0; k < 128; k++) {
+				for (k = 0; k < INDIRECTS; k++) {
 					indr->blocks[k] = dbs[k];
 				}
 				bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
@@ -3310,13 +3310,13 @@ int checkDNODE(dnode *d, int block) {
 
 				}
 				if (j != 0 && indr2->blocks[j-1].valid) {
-					for (k = 0; k < 128; k++) {
+					for (k = 0; k < INDIRECTS; k++) {
 						indr->blocks[k] = dbs[k];
 					}
 					bufdwrite(indr2->blocks[j-1].block, (char *) indr, sizeof(indirect));
 				}
 								
-				if (j < 128) {
+				if (j < INDIRECTS) {
 					if (indr2->blocks[j].valid) {
 						bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 
@@ -3328,7 +3328,7 @@ int checkDNODE(dnode *d, int block) {
 						}
 
 						checked = 0;
-						to_check = 128;
+						to_check = INDIRECTS;
 						dbs = indr->blocks;
 
 					}
@@ -3364,7 +3364,7 @@ int checkINODE(inode *i) {
 	int actual_size = 0;
 	int expected_size = i->size;
 	blocknum *dbs = i->direct;
-	int checked = 0, to_check = 110;
+	int checked = 0, to_check = DIRECTS;
 
 	indirect * indr = indirect_create();
 	indirect * indr2 = indirect_create();
@@ -3391,7 +3391,7 @@ int checkINODE(inode *i) {
 			checked++;
 		}
 		else if (lvl == 0) { // if we need to make the dbs first indirection level
-			for (k = 0; k < 110; k++) {
+			for (k = 0; k < DIRECTS; k++) {
 				i->direct[k] = dbs[k];
 			}
 			
@@ -3403,7 +3403,7 @@ int checkINODE(inode *i) {
 					disk_status[i->single_indirect.block] = 2;
 					bufdread(i->single_indirect.block, (char *) indr, sizeof(indirect));
 					checked = 0;
-					to_check = 128;
+					to_check = INDIRECTS;
 					dbs = indr->blocks;
 				}
 			}
@@ -3411,7 +3411,7 @@ int checkINODE(inode *i) {
 		}
 		else if (lvl == 1) { // if we need to make the dbs second indirection level
 			if (j == 0 && i->single_indirect.valid) {
-				for (k = 0; k < 128; k++) {
+				for (k = 0; k < INDIRECTS; k++) {
 					indr->blocks[k] = dbs[k];
 				}
 				bufdwrite(i->single_indirect.block, (char *) indr, sizeof(indirect));
@@ -3432,12 +3432,12 @@ int checkINODE(inode *i) {
 
 				}
 				if (j != 0 && indr2->blocks[j-1].valid) {
-					for (k = 0; k < 128; k++) {
+					for (k = 0; k < INDIRECTS; k++) {
 						indr->blocks[k] = dbs[k];
 					}
 					bufdwrite(indr2->blocks[j-1].block, (char *) indr, sizeof(indirect));
 				}
-				if (j < 128) {
+				if (j < INDIRECTS) {
 					if (indr2->blocks[j].valid) {
 						bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 
@@ -3449,7 +3449,7 @@ int checkINODE(inode *i) {
 						}
 
 						checked = 0;
-						to_check = 128;
+						to_check = INDIRECTS;
 						dbs = indr->blocks;
 
 					}
