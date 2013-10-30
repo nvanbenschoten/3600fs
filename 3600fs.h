@@ -40,8 +40,8 @@ typedef struct vcb_s {
 	char name[491];
 	// a dirty bit to check if it was removed correctly
 	char dirty;
-        // the size of the disk in blocks
-        int blocks;
+    // the size of the disk in blocks
+    int blocks;
 } vcb;
 
 typedef struct dnode_t {
@@ -135,7 +135,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 int getNextFree(vcb *v);
 int releaseFree(vcb *v, blocknum block);
 int checkIntegrity();
-int checkDNODE(dnode *d);
+int checkDNODE(dnode *d, int block);
 int checkINODE(inode *i);
 
 #endif
