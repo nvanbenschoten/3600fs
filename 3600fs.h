@@ -37,9 +37,11 @@ typedef struct vcb_s {
 	// the location of the first free block
 	blocknum free;
 	// the name of your disk
-	char name[495];
+	char name[491];
 	// a dirty bit to check if it was removed correctly
 	char dirty;
+        // the size of the disk in blocks
+        int blocks;
 } vcb;
 
 typedef struct dnode_t {
@@ -62,9 +64,9 @@ typedef struct indirect_t {
 } indirect;
 
 typedef struct direntry_t {
-	// types: (not sure if these are decided by us or by inodes spec?)
-    // 0 = directory
-    // 1 = file
+	// types:
+        // 0 = directory
+        // 1 = file
 	char name[27];
 	char type;
 	blocknum block;
@@ -132,5 +134,8 @@ int findDNODE(dnode *directory, char *path, blocknum *block);
 int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode, blocknum *block, int deleteFlag, int directoryBlock, int renameFlag, char *newName);
 int getNextFree(vcb *v);
 int releaseFree(vcb *v, blocknum block);
+int checkIntegrity();
+int checkDNODE(dnode *d);
+int checkINODE(inode *i);
 
 #endif
