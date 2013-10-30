@@ -3189,7 +3189,7 @@ int checkIntegrity() {
 
 		// add any orphaned blocks to the free list
 		int i = 0;
-		for (i = 0; i < num_blocks; i++) {
+		for (i = 1; i < num_blocks; i++) {
 				if (disk_status[i] == 0) {
 						f->next = blocknum_create(i, 1);
 						bufdwrite(f_previous, (char *) f, sizeof(freeblock));
