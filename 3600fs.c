@@ -184,7 +184,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		stbuf->st_mtime   = matchd->modify_time.tv_sec; // modify time
 		stbuf->st_ctime   = matchd->create_time.tv_sec; // create time
 		stbuf->st_size    = matchd->size; // directory size
-		stbuf->st_blocks  = (matchd->size + DIRENT_NUN - 1)/(DIRENT_NUN); // directory size in blocks
+		stbuf->st_blocks  = (matchd->size + DIRENT_NUM - 1)/(DIRENT_NUM); // directory size in blocks
 	}
 	else if (ret == 1) {
 		// If the dirent is for a file
@@ -307,7 +307,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 		if (ent_b < dirents) { // if we have more dirents to look through
 			if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
 				bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
-				for (i = 0; i < DIRENT_NUN; i++) { // look through the direntries
+				for (i = 0; i < DIRENT_NUM; i++) { // look through the direntries
 					if (!de->entries[i].block.valid) { // if any of the entries are invalid
 						// meaning we can use them to write to
 						//strcpy(de->entries[i].name, name); 
@@ -644,15 +644,15 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	// Check in directs
 	unsigned int count = offset;
-	while (count < DIRECTS*DIRENT_NUN) {
+	while (count < DIRECTS*DIRENT_NUM) {
 
-		if (d->direct[count/DIRENT_NUN].valid) {
+		if (d->direct[count/DIRENT_NUM].valid) {
 
 			dirent *de = dirent_create();
-			bufdread(d->direct[count/DIRENT_NUN].block, (char *)de, sizeof(dirent));
+			bufdread(d->direct[count/DIRENT_NUM].block, (char *)de, sizeof(dirent));
 
 			int j;
-			for (j = count%DIRENT_NUN; j < DIRENT_NUN; j++) {
+			for (j = count%DIRENT_NUM; j < DIRENT_NUM; j++) {
 				// j = direntry entry
 				count++;
 				if (de->entries[j].block.valid) {
@@ -672,7 +672,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			dirent_free(de);
 		}
 		else {
-			count += DIRENT_NUN;
+			count += DIRENT_NUM;
 		}
 	}
 
@@ -680,15 +680,15 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	if (d->single_indirect.valid) {
 		indirect *ind = indirect_create();
 		bufdread(d->single_indirect.block, (char *)ind, sizeof(indirect));
-		while(count < INDIRECTS*DIRENT_NUN+DIRECTS*DIRENT_NUN) {
+		while(count < INDIRECTS*DIRENT_NUM+DIRECTS*DIRENT_NUM) {
 
-			if (ind->blocks[(count-DIRECTS*DIRENT_NUN)/DIRENT_NUN].valid) {
+			if (ind->blocks[(count-DIRECTS*DIRENT_NUM)/DIRENT_NUM].valid) {
 
 				dirent *de = dirent_create();
-				bufdread(ind->blocks[(count-DIRECTS*DIRENT_NUN)/DIRENT_NUN].block, (char *)de, sizeof(dirent));
+				bufdread(ind->blocks[(count-DIRECTS*DIRENT_NUM)/DIRENT_NUM].block, (char *)de, sizeof(dirent));
 
 				int j;
-				for (j = count%DIRENT_NUN; j < DIRENT_NUN; j++) {
+				for (j = count%DIRENT_NUM; j < DIRENT_NUM; j++) {
 					// j = direntry entry
 					count++;
 					if (de->entries[j].block.valid) {
@@ -709,14 +709,14 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 				dirent_free(de);
 			}
 			else {
-				count += DIRENT_NUN;
+				count += DIRENT_NUM;
 			}
 		}
 		
 		indirect_free(ind);
 	}
 	else {
-		count += INDIRECTS*DIRENT_NUN;
+		count += INDIRECTS*DIRENT_NUM;
 	}
 
 	// Double indirection
@@ -724,18 +724,18 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 		indirect *firstind = indirect_create();
 		bufdread(d->double_indirect.block, (char *)firstind, sizeof(indirect));
-		while(count < INDIRECTS*INDIRECTS*DIRENT_NUN+INDIRECTS*DIRENT_NUN+DIRECTS*DIRENT_NUN) {
+		while(count < INDIRECTS*INDIRECTS*DIRENT_NUM+INDIRECTS*DIRENT_NUM+DIRECTS*DIRENT_NUM) {
 			// While below limit of direct, first indirect, and second indirect
 			
-			if (firstind->blocks[(count-DIRECTS*DIRENT_NUN-INDIRECTS*DIRENT_NUN)/(DIRENT_NUN*INDIRECTS)].valid) {
+			if (firstind->blocks[(count-DIRECTS*DIRENT_NUM-INDIRECTS*DIRENT_NUM)/(DIRENT_NUM*INDIRECTS)].valid) {
 				// If first indirect is valid
 
 				// Read in second indirect
 				indirect *secind = indirect_create();
-				bufdread(firstind->blocks[(count-DIRECTS*DIRENT_NUN-INDIRECTS*DIRENT_NUN)/(DIRENT_NUN*INDIRECTS)].block, (char *)secind, sizeof(indirect));
+				bufdread(firstind->blocks[(count-DIRECTS*DIRENT_NUM-INDIRECTS*DIRENT_NUM)/(DIRENT_NUM*INDIRECTS)].block, (char *)secind, sizeof(indirect));
 
 				int k;
-				for (k = (count-DIRECTS*DIRENT_NUN-INDIRECTS*DIRENT_NUN)/DIRENT_NUN; k < INDIRECTS; k++) {
+				for (k = (count-DIRECTS*DIRENT_NUM-INDIRECTS*DIRENT_NUM)/DIRENT_NUM; k < INDIRECTS; k++) {
 					// K is equal to the index in the second indirect block
 
 					if (secind->blocks[k].valid) {
@@ -744,7 +744,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
-						for (j = (count-DIRECTS*DIRENT_NUN-INDIRECTS*DIRENT_NUN)%DIRENT_NUN; j < DIRENT_NUN; j++) {
+						for (j = (count-DIRECTS*DIRENT_NUM-INDIRECTS*DIRENT_NUM)%DIRENT_NUM; j < DIRENT_NUM; j++) {
 							// j = direntry entry
 							count++;
 							if (de->entries[j].block.valid) {
@@ -766,20 +766,20 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 						dirent_free(de);
 					}
 					else {
-						count += DIRENT_NUN;
+						count += DIRENT_NUM;
 					}
 				}
 
 				indirect_free(secind);
 			}
 			else {
-				count += INDIRECTS*DIRENT_NUN;
+				count += INDIRECTS*DIRENT_NUM;
 			}
 		}
 		indirect_free(firstind);
 	}
 	else {
-		count += INDIRECTS*INDIRECTS*DIRENT_NUN;
+		count += INDIRECTS*INDIRECTS*DIRENT_NUM;
 	}
 
 	dnode_free(d);
@@ -881,7 +881,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		if (ent_b < dirents) { // if we have more dirents to look through
 			if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
 				bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
-				for (i = 0; i < DIRENT_NUN; i++) { // look through the direntries
+				for (i = 0; i < DIRENT_NUM; i++) { // look through the direntries
 					if (!de->entries[i].block.valid) { // if any of the entries are invalid
 						// meaning we can use them to write to
 						setName(&de->entries[i], name); // write to them
@@ -1249,7 +1249,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 			return -1;
 		}
 	}
-	else if (blocks < DIRENT_NUN622) { // need to look in double indirects
+	else if (blocks < DIRENT_NUM622) { // need to look in double indirects
 		lvl++; // \    / |_| \ /
 		lvl++; //  \/\/  | |  |
 		if (i_node->double_indirect.valid) {
@@ -1539,7 +1539,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 			// free and return???
 		}
 	}
-	else if (blocks < DIRENT_NUN622) { // double indirect magic numbers
+	else if (blocks < DIRENT_NUM622) { // double indirect magic numbers
 		lvl++; // these two lines are the best in the program
 		lvl++; // lol
 		if (i_node->double_indirect.valid) {
@@ -2086,7 +2086,7 @@ static int vfs_rename(const char *from, const char *to)
  * This function will change the permissions on the file
  * to be mode.  This should only update the file's mode.  
  * Only the permission bits of mode should be examined 
- * (basically, the last DIRENT_NUN bits).  You should do something like
+ * (basically, the last DIRENT_NUM bits).  You should do something like
  * 
  * fcb->mode = (mode & 0x0000ffff);
  *
@@ -2620,7 +2620,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 			bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 			int j;
-			for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
+			for (j = 0; count < directory->size && j < DIRENT_NUM; j++) {
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
@@ -2668,7 +2668,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 				bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
 
 				int j;
-				for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
+				for (j = 0; count < directory->size && j < DIRENT_NUM; j++) {
 					// j = direntry entry
 					if (de->entries[j].block.valid) {
 						count++;
@@ -2727,7 +2727,7 @@ int findDNODE(dnode *directory, char *path, blocknum *block) {
 						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
-						for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
+						for (j = 0; count < directory->size && j < DIRENT_NUM; j++) {
 							// j = direntry entry
 							if (de->entries[j].block.valid) {
 								count++;
@@ -2804,7 +2804,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 			bufdread(directory->direct[i].block, (char *)de, sizeof(dirent));
 
 			int j;
-			for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
+			for (j = 0; count < directory->size && j < DIRENT_NUM; j++) {
 				// j = direntry entry
 				if (de->entries[j].block.valid) {
 					count++;
@@ -2831,7 +2831,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 							int l;
 							// Set direntry to invalid
 							de->entries[j].block.valid = 0;
-							for (l = 0; l < DIRENT_NUN; l ++) {
+							for (l = 0; l < DIRENT_NUM; l ++) {
 								if (de->entries[l].block.valid) {
 									empty++;
 								}
@@ -2890,7 +2890,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 				bufdread(ind->blocks[i].block, (char *)de, sizeof(dirent));
 
 				int j;
-				for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
+				for (j = 0; count < directory->size && j < DIRENT_NUM; j++) {
 					// j = direntry entry
 					if (de->entries[j].block.valid) {
 						count++;
@@ -2920,7 +2920,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 								de->entries[j].block.valid = 0;
 
 								// Cycle over dirent to count direntries
-								for (l = 0; l < DIRENT_NUN; l ++) {
+								for (l = 0; l < DIRENT_NUM; l ++) {
 									if (de->entries[l].block.valid) {
 										empty++;
 									}
@@ -3010,7 +3010,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 						bufdread(secind->blocks[k].block, (char *)de, sizeof(dirent));
 
 						int j;
-						for (j = 0; count < directory->size && j < DIRENT_NUN; j++) {
+						for (j = 0; count < directory->size && j < DIRENT_NUM; j++) {
 							// j = direntry entry
 							if (de->entries[j].block.valid) {
 								count++;
@@ -3040,7 +3040,7 @@ int getNODE(dnode *directory, char *name, dnode *searchDnode, inode *searchInode
 										// Set direntry to invalid
 										de->entries[j].block.valid = 0;
 
-										for (l = 0; l < DIRENT_NUN; l ++) {
+										for (l = 0; l < DIRENT_NUM; l ++) {
 											if (de->entries[l].block.valid) {
 												empty++;
 											}
@@ -3234,7 +3234,7 @@ int checkDNODE(dnode *d, int block) {
 					disk_status[dbs[checked].block] = 2;
 				}
 				bufdread(dbs[checked].block, (char *) de, sizeof(dirent));
-				for (i = 0; i < DIRENT_NUN; i++) {
+				for (i = 0; i < DIRENT_NUM; i++) {
 					if (de->entries[i].block.valid) {
 						if (disk_status[de->entries[i].block.block] == 1) {
 							de->entries[i].block.valid = 0;
