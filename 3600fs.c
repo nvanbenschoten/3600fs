@@ -3184,7 +3184,7 @@ int checkIntegrity() {
 		// traverse dnodes and inodes checking their status
 		dnode *d = dnode_create(0, 0, 0, 0);
 		bufdread(v->root.block, (char *) d, sizeof(dnode));
-		checkDNODE(d); // recursion!
+		checkDNODE(d, v->root.block); // recursion!
 		bufdwrite(v->root.block, (char *) d, sizeof(dnode));
 
 		// add any orphaned blocks to the free list
@@ -3203,7 +3203,7 @@ int checkIntegrity() {
 		return 0;
 }
 
-int checkDNODE(dnode *d) {
+int checkDNODE(dnode *d, int block) {
 		int lvl = 0;
 		int actual_size = 0;
 		int expected_size = d->size;
@@ -3245,8 +3245,10 @@ int checkDNODE(dnode *d) {
 
 												if (de->entries[i].type == 0) { // is a dnode
 														bufdread(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
-														checkDNODE(d_next);
-														bufdwrite(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
+														if (block != de->entries[i].block.block) {
+															checkDNODE(d_next);
+															bufdwrite(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
+														}
 												}
 												else if (de->entries[i].type == 1) { // is an inode
 														bufdread(de->entries[i].block.block, (char *) i_next, sizeof(inode));
