@@ -48,7 +48,7 @@ We implement almost all of the core functionality that an end user would expect 
 - API Functions
 
 vsf_mount
-In this function, we connected to the disk, initializing our cache, read in the vcb, and performed integrity checking on the vcb. This integrity checking included making sure the disk was our disk, calling our integrity checking function, and finally setting the vcb to dirty.
+In this function, we connect to the disk, initialize our cache, read in the vcb, and perform integrity checking on the vcb if necessary. This integrity checking included making sure the disk was our disk, calling our integrity checking function, and finally setting the vcb to dirty.
 
 vfs_unmount
 In this function we set the vcb to clean, write it to disk, and disconnect from our disk.
@@ -129,7 +129,7 @@ We faced a number of challenges while creating our inodes file system. The first
 
 Another challenge we faced was creating an efficient code base without having huge amounts of duplicate code. We overcame this challenge by abstracting commonly used functions like all of the block creation and destruction, searching for nodes, and getting and freeing blocks from the free list into helper functions. These functions resulted in an API which both simplified our code base, made it more efficient, and made it much easier to write. In a few places, there does look like a large amount of duplicate code (vfs_create & vfs_mkdir), but this is necessary to allow for the differences between inodes and dnodes, such as the use of data blocks vs dirents. Abstracting some of this duplicate code could have been possible, but we made the decision early on that a small amount of duplicate code would be worth it if the code was easier to understand, modify, and use. 
 
-The single biggest challenged faced by Team America was indirection. This feature of inodes allows for theoretically infinite node storage, but brings a large array of challenges with it. Indirection made block references in Inodes and Dnodes much harder to program. Each time scanning over one of these nodes was necessary, functionality to scan over the direct blocks/dirents, the single indirect blocks/dirents, and the double indirect blocks/dirents had to be created. The two team meambers of Team America approached this challenge from different directions. Nathan based his scan on a series of conditional statements, while Nat based his scan on a more looping structure. In the end, it proved to be the edges of indirection that were the hardest to perfect, but with a large amount of testing, all bugs from indirection were removed.
+The single biggest challenged faced by Team America was indirection. This feature of inodes allows for theoretically infinite node storage, but brings a large array of challenges with it. Indirection made block references in Inodes and Dnodes much harder to program. Each time scanning over one of these nodes was necessary, functionality to scan over the direct blocks/dirents, the single indirect blocks/dirents, and the double indirect blocks/dirents had to be created. The two team meambers of Team America approached this challenge from different directions. Nathan based his scan on a series of conditional statements, while Nathaniel based his scan on a more looping structure. In the end, it proved to be the edges of indirection that were the hardest to perfect, but with a large amount of testing, all bugs from indirection were removed.
 
 ----------------------
  Properties/Features
@@ -147,7 +147,7 @@ If a disk was not unmounted safely upon its last use, we perform an integrity ch
  Testing Procedure
 ----------------------
 
-We based our testing on the provided test but as our file system was split into different API functions, it was easy to debug and test those individually as we implemented them to ensure the components of our file systems were working as expected. During these tests we heavily used GDB to debug edge cases that we thought of and saw. To perform this testing, we found that we needed to run the file system in gdb in one shell, and then traverse/ interact with the file system in another shell. Combining this process with a liberal use of hexdumping the disk allowed us to fully understand how our file system reacted to different actions, and where it was performing correctly and incorrectly. Throughout development we also modified the provided test to allow us to automatically test various specific cases. Additionally, we integrated git into our workflow as it provided a convenient tool for our workflow. In total we had ~150 commits. 
+We based our testing on the provided test but as our file system was split into different API functions, it was easy to debug and test those individually as we implemented them to ensure the components of our file systems were working as expected. During these tests we heavily used GDB to debug edge cases that we thought of and saw. To perform this testing, we found that we needed to run the file system in gdb in one shell, and then traverse/interact with the file system in another shell. Combining this process with a liberal use of hexdumping the disk allowed us to fully understand how our file system reacted to different actions, and where it was performing correctly and incorrectly. Throughout development we also modified the provided test to allow us to automatically test various specific cases. Additionally, we integrated git into our workflow as it provided a convenient tool for our workflow. In total we had ~150 commits. 
 
 ----------------------
  Bald Eagle
@@ -185,3 +185,5 @@ We based our testing on the provided test but as our file system was split into 
                 / .  .  . : | :!        \\			- Team America
                (_/  /   | | j-"          ~^
                  ~-<_(_.^-~"
+
+			(Shamelessly stolen from the internet)
