@@ -33,6 +33,8 @@
 
 // Global vcb
 vcb *v;
+char * disk_status;
+int num_blocks;
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -67,7 +69,11 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 	}
 
 	if (v->dirty) {
+                num_blocks = v->blocks;
+                disk_status = (char *) calloc(num_blocks, sizeof(char));
 		// Perform integrity check
+                checkIntegrity();
+                free(disk_status);
 	}
 
 	// update vcb with dirty bit
@@ -3160,4 +3166,312 @@ int releaseFree(vcb *v, blocknum block) {
 	v->free = block;
 	freeblock_free(f);
 	return 0;
+}
+
+// check the integrity of the disk
+// char * disk_status;
+// disk status codes:
+// 1 = free
+// 2 = used for something
+// int num_blocks;
+int checkIntegrity() {
+        // write the status of all of the frere blocks to disk_status
+        freeblock *f = freeblock_create(blocknum_create(0, 0));
+        bufdread(v->free.block, (char *) f, sizeof(freeblock));
+        disk_status[v->free.block] = 1;
+        int f_previous = -1;
+        while (f->next.valid) {
+                disk_status[f->next.block] = 1;
+                f_previous = f->next.block;
+                bufdread(f->next.block, (char *) f, sizeof(freeblock));
+        }
+
+        // traverse dnodes and inodes checking their status
+        dnode *d = dnode_create(0, 0, 0, 0);
+        bufdread(v->root.block, (char *) d, sizeof(dnode));
+        checkDNODE(d); // recursion!
+        bufdwrite(v->root.block, (char *) d, sizeof(dnode));
+
+        // add any orphaned blocks to the free list
+        int i = 0;
+        for (i = 0; i < num_blocks; i++) {
+                if (disk_status[i] == 0) {
+                        f->next = blocknum_create(i, 1);
+                        bufdwrite(f_previous, (char *) f, sizeof(freeblock));
+                        free(f);
+                        f = freeblock_create(blocknum_create(0, 0));
+                        f_previous = i;
+                }
+        }
+        bufdwrite(f_previous, (char *) f, sizeof(freeblock));
+        free(f);
+        return 0;
+}
+
+int checkDNODE(dnode *d) {
+        int lvl = 0;
+        int actual_size = 0;
+        int expected_size = d->size;
+        blocknum *dbs = d->direct;
+        int checked = 0, to_check = 110;
+
+        dirent * de = dirent_create();
+        int i = 0;
+
+        indirect * indr = indirect_create();
+        indirect * indr2 = indirect_create();
+        int j = 0;
+        int k = 0;
+        
+        dnode * d_next = dnode_create(0, 0, 0, 0);
+        inode * i_next = inode_create(0, 0, 0, 0);
+
+        while (actual_size < expected_size) {
+                if (checked < to_check) {
+                        if (dbs[checked].valid) { // if the entry is a 
+                                if (disk_status[dbs[checked].block] == 1) {
+                                        dbs[checked].valid = 0;
+                                }
+                                else {
+                                        disk_status[dbs[checked].block] = 2;
+                                }
+                                bufdread(dbs[checked].block, (char *) de, sizeof(dirent));
+                                for (i = 0; i < 16; i++) {
+                                        if (de->entries[i].block.valid) {
+                                                if (disk_status[de->entries[i].block.block] == 1) {
+                                                        de->entries[i].block.valid = 0;
+
+                                                }
+                                                else {
+                                                        disk_status[de->entries[i].block.block] = 2;
+                                                }
+
+                                                actual_size++;
+
+                                                if (de->entries[i].type == 0) { // is a dnode
+                                                        bufdread(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
+                                                        checkDNODE(d_next);
+                                                        bufdwrite(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
+                                                }
+                                                else if (de->entries[i].type == 1) { // is an inode
+                                                        bufdread(de->entries[i].block.block, (char *) i_next, sizeof(inode));
+                                                        checkINODE(i_next);
+                                                        bufdwrite(de->entries[i].block.block, (char *) i_next, sizeof(inode));
+                                                }
+                                        }
+                                }
+                                bufdwrite(dbs[checked].block, (char *) de, sizeof(dirent));
+                                
+                                // actual_size++;
+                        }
+                        else {
+                                // do nothing because unused
+                        }
+
+                        checked++;
+                }
+                else if (lvl == 0) { // if we need to make the dbs first indirection level
+                        for (k = 0; k < 110; k++) {
+                                d->direct[k] = dbs[k];
+                        }
+
+                        if (d->single_indirect.valid) {
+                                if (disk_status[d->single_indirect.block] == 1) {
+                                        d->single_indirect.valid = 0;
+                                }
+                                else {
+                                        disk_status[d->single_indirect.block] = 2;
+                                        bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
+                                        checked = 0;
+                                        to_check = 128;
+                                        dbs = indr->blocks;
+                                }
+                        }
+                        lvl++;
+                }
+                else if (lvl == 1) { // if we need to make the dbs second indirection level
+                        if (j == 0 && d->single_indirect.valid) {
+                                for (k = 0; k < 128; k++) {
+                                        indr->blocks[k] = dbs[k];
+                                }
+                                bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
+                        }
+
+                        if (d->double_indirect.valid) {
+                                if (j == 0) {
+                                        if (disk_status[d->double_indirect.block] == 1) {
+                                                d->double_indirect.valid = 0;
+                                                lvl++;
+                                        }
+                                        else {
+                                                disk_status[d->double_indirect.block] = 2;
+                                                bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+                                        }
+
+                                }
+                                if (j != 0 && indr2->blocks[j-1].valid) {
+                                        for (k = 0; k < 128; k++) {
+                                                indr->blocks[k] = dbs[k];
+                                        }
+                                        bufdwrite(indr2->blocks[j-1].block, (char *) indr, sizeof(indirect));
+                                }
+                                
+                                if (j < 128) {
+                                        if (indr2->blocks[j].valid) {
+                                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+
+                                                if (disk_status[indr2->blocks[j].block] == 1) {
+                                                        indr2->blocks[j].valid = 0;
+                                                }
+                                                else {
+                                                        disk_status[indr2->blocks[j].block] = 2;
+                                                }
+
+                                                checked = 0;
+                                                to_check = 128;
+                                                dbs = indr->blocks;
+
+                                        }
+                                        j++;
+                                }
+                                else {
+                                        lvl++;
+                                }
+                                        /////////
+                        }
+                        else {
+                                if (d->double_indirect.valid) {
+                                        bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+                                }
+                                lvl++;
+                        }
+                }
+                else { // we should be at the end so make the expected_size = actual_size
+                        if (d->double_indirect.valid) {
+                                bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+                        }
+                        expected_size = actual_size;
+                        d->size = actual_size;
+                }
+        }
+
+        return 0;
+}
+
+
+int checkINODE(inode *i) {
+        int lvl = 0;
+        int actual_size = 0;
+        int expected_size = i->size;
+        blocknum *dbs = i->direct;
+        int checked = 0, to_check = 110;
+
+        indirect * indr = indirect_create();
+        indirect * indr2 = indirect_create();
+        int j = 0;
+        int k = 0;
+
+        while (actual_size < expected_size) {
+                if (checked < to_check) {
+                        if (dbs[checked].valid) { // if the entry is a 
+                                if (disk_status[dbs[checked].block] == 1) {
+                                        dbs[checked].valid = 0;
+                                }
+                                else {
+                                        disk_status[dbs[checked].block] = 2;
+                                        actual_size += sizeof(db);
+                                }
+                                
+                                // actual_size++;
+                        }
+                        else {
+                                // do nothing because unused
+                        }
+
+                        checked++;
+                }
+                else if (lvl == 0) { // if we need to make the dbs first indirection level
+                        for (k = 0; k < 110; k++) {
+                                i->direct[k] = dbs[k];
+                        }
+                        
+                        if (i->single_indirect.valid) {
+                                if (disk_status[i->single_indirect.block] == 1) {
+                                        i->single_indirect.valid = 0;
+                                }
+                                else {
+                                        disk_status[i->single_indirect.block] = 2;
+                                        bufdread(i->single_indirect.block, (char *) indr, sizeof(indirect));
+                                        checked = 0;
+                                        to_check = 128;
+                                        dbs = indr->blocks;
+                                }
+                        }
+                        lvl++;
+                }
+                else if (lvl == 1) { // if we need to make the dbs second indirection level
+                        if (j == 0 && i->single_indirect.valid) {
+                                for (k = 0; k < 128; k++) {
+                                        indr->blocks[k] = dbs[k];
+                                }
+                                bufdwrite(i->single_indirect.block, (char *) indr, sizeof(indirect));
+                        }
+                        
+                        if (i->double_indirect.valid) {
+
+
+                                if (j == 0) {
+                                        if (disk_status[i->double_indirect.block] == 1) {
+                                                i->double_indirect.valid = 0;
+                                                lvl++;
+                                        }
+                                        else {
+                                                disk_status[i->double_indirect.block] = 2;
+                                                bufdread(i->double_indirect.block, (char *) indr2, sizeof(indirect));
+                                        }
+
+                                }
+                                if (j != 0 && indr2->blocks[j-1].valid) {
+                                        for (k = 0; k < 128; k++) {
+                                                indr->blocks[k] = dbs[k];
+                                        }
+                                        bufdwrite(indr2->blocks[j-1].block, (char *) indr, sizeof(indirect));
+                                }
+                                if (j < 128) {
+                                        if (indr2->blocks[j].valid) {
+                                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+
+                                                if (disk_status[indr2->blocks[j].block] == 1) {
+                                                        indr2->blocks[j].valid = 0;
+                                                }
+                                                else {
+                                                        disk_status[indr2->blocks[j].block] = 2;
+                                                }
+
+                                                checked = 0;
+                                                to_check = 128;
+                                                dbs = indr->blocks;
+
+                                        }
+                                        j++;
+                                }
+                                else {
+                                        lvl++;
+                                }
+                                        /////////
+                        }
+                        else {
+                                lvl++;
+                        }
+                }
+                else { // we should be at the end so make the expected_size = actual_size
+                        if (i->double_indirect.valid) {
+                                bufdwrite(i->double_indirect.block, (char *) indr2, sizeof(indirect));
+                        }
+                        expected_size = actual_size;
+                        i->size = actual_size;
+                }
+        }
+
+        return 0;
 }

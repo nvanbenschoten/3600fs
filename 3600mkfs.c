@@ -25,6 +25,7 @@ void myformat(int size) {
     vcb * v = vcb_create(DISKNUMBER, n);
     v->root = blocknum_create(1, 1);
     v->free = blocknum_create(3, 1);
+    v->blocks = size;
 
     // Write to disk
     bufdwrite(0, (char *)v, sizeof(vcb));
