@@ -1249,7 +1249,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 			return -1;
 		}
 	}
-	else if (blocks < DIRENT_NUM622) { // need to look in double indirects
+	else if (blocks < 16622) { // need to look in double indirects
 		lvl++; // \    / |_| \ /
 		lvl++; //  \/\/  | |  |
 		if (i_node->double_indirect.valid) {
@@ -1539,7 +1539,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 			// free and return???
 		}
 	}
-	else if (blocks < DIRENT_NUM622) { // double indirect magic numbers
+	else if (blocks < 16622) { // double indirect magic numbers
 		lvl++; // these two lines are the best in the program
 		lvl++; // lol
 		if (i_node->double_indirect.valid) {
