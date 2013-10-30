@@ -1536,7 +1536,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 			blocks_write = 128;
 		}
 		else { // there should never be an else?
-			quit
 			// free and return???
 		}
 	}
