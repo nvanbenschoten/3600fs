@@ -6,7 +6,7 @@ const int DISKNUMBER = 13371337;
 
 // Cache!!!
 blocknum cacheBlockNum [CACHE_SIZE];
-char cacheBlock [CACHE_SIZE*BLOCKSIZE];
+char cacheBlock [CACHE_SIZE*512];
 int cacheOrder [CACHE_SIZE];
 
 // Constructors
