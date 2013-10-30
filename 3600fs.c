@@ -3242,22 +3242,22 @@ int checkDNODE(dnode *d, int block) {
 						}
 						else {
 							disk_status[de->entries[i].block.block] = 2;
+                                                        actual_size++;
+
+                                                        if (de->entries[i].type == 0) { // is a dnode
+                                                                bufdread(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
+                                                                if (block != de->entries[i].block.block && strcmp(de->entries[i].name, "..")) {
+                                                                        checkDNODE(d_next, de->entries[i].block.block);
+                                                                        bufdwrite(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
+                                                                }
+                                                        }
+                                                        else if (de->entries[i].type == 1) { // is an inode
+                                                                bufdread(de->entries[i].block.block, (char *) i_next, sizeof(inode));
+                                                                checkINODE(i_next);
+                                                                bufdwrite(de->entries[i].block.block, (char *) i_next, sizeof(inode));
+                                                        }
 						}
 
-						actual_size++;
-
-						if (de->entries[i].type == 0) { // is a dnode
-							bufdread(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
-							if (block != de->entries[i].block.block && strcmp(de->entries[i].name, "..")) {
-								checkDNODE(d_next, de->entries[i].block.block);
-								bufdwrite(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
-							}
-						}
-						else if (de->entries[i].type == 1) { // is an inode
-							bufdread(de->entries[i].block.block, (char *) i_next, sizeof(inode));
-							checkINODE(i_next);
-							bufdwrite(de->entries[i].block.block, (char *) i_next, sizeof(inode));
-						}
 					}
 				}
 				bufdwrite(dbs[checked].block, (char *) de, sizeof(dirent));
