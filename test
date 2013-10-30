@@ -38,7 +38,7 @@ $lgdata =~ s/^(.*)/$smdata x 200 . $1/mge;
 my $vlgdata = $smdata;
 $vlgdata =~ s/^(.*)/$smdata x 20000 . $1/mge;
 
-my $LONGFILE = "$DIR/abcdefghijklmnopqrstuvwxyzab";
+my $LONGFILE = "$DIR/abcdefghijklmnopqrstuvwxyza";
 
 if (! (-e $MKFS)) { error("Could not find $MKFS\n"); }
 if (! (-e $FS)) { error("Could not find $FS\n"); }

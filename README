@@ -4,7 +4,9 @@
  ___/ / /_/ / /_/ / /_/ / __(__  ) 
 /____/\____/\____/\____/_/ /____/  
 
-Nathaniel Dempkowski and Nathan Vanbenschoten
+--- Team America ---
+
+Nathaniel Dempkowski and Nathan VanBenschoten
 
 ----------------------
  High Level Approach
@@ -13,6 +15,8 @@ Nathaniel Dempkowski and Nathan Vanbenschoten
 We have chosen to implement the inode-based file system layout.
 
 At a high level, the disk is divided into the following seven different types of blocks:
+
+- BLOCKS
 
 Volume Control (VCB)
 The VCB is the first block in the file system, and contains metadata about the entire disk and the location of the root directory. The location of the first FREE block is also stored in the VCB.
@@ -40,3 +44,145 @@ Upon the initial format of the disk, we create a VCB as block 0, a DNODE as bloc
 We chose to implement the inode-based file system layout because we felt that it was a more elegant and interesting design, and were willing to put in the extra effort that goes along with that. It also more closely mirrors modern file system layouts, and we felt there was more to be learned from implementing it.
 
 We implement almost all of the core functionality that an end user would expect in our file system. Our disk is mountable and unmountable. Once the disk is mounted files and directories can be created, renamed, and deleted. We support metadata for files and directories like permissions, owners, and create, access, and modify times. We can read, write, and truncate the data for these files. Directories can be read, and we also support recursive directories as a usable filesystem should. Linux utilities like ls, cat, rm, touch, etc. generally work with our filesystem as expected.
+
+- API Functions
+
+vsf_mount
+In this function, we connected to the disk, initializing our cache, read in the vcb, and performed integrity checking on the vcb. This integrity checking included making sure the disk was our disk, calling our integrity checking function, and finally setting the vcb to dirty.
+
+vfs_unmount
+In this function we set the vcb to clean, write it to disk, and disconnect from our disk.
+
+vfs_getattr
+When getting the attribute for a file, we first had to locate the file. To do this, we first sperated the path string into the directory and the filename using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function. Next, we find the file in this dnode using our getNODE() function. From here, we can using the correct node (dnode or inode) to accurately fill out the stat buffer with the needed output.
+
+vfs_mkdir
+When creating a new directory, we first had to locate where the dnode should be stored. To do this, we first sperated the path string into the directory and the new directory name using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function to find the parent directory. Next, we use our getNODE() function to make sure the dnode doesnt already exist. From here, we find the first available free direntry in the parent dnode and write our new blockNum to it. We then wrote a new dnode to this blocknum on disk. We also create . and .. while creating the new directory and point them to the correct blocks.
+
+vfs_readdir
+When reading a directory, we first had to locate the dnode. To do this, used our findDNODE() function. Next, we implemented a way so that our function could step through a dnode starting at a given offset and fill up a buffer using the passed in filler function each time it encounters a valid direntry. The function kept track of the offset so that it could always locate where in the dnode it was by the offset, requiring some complex logic.
+
+vfs_create
+When creating a new file, we first had to locate where the inode should be stored. To do this, we first sperated the path string into the directory and the new file name using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function to find the parent directory. Next, we use our getNODE() function to make sure the inode doesnt already exist. From here, we find the first available free direntry in the parent dnode and write our new blockNum to it. We then wrote a new inode to this blocknum on disk. 
+
+vfs_read
+TODO
+
+vfs_write
+TODO
+
+vfs_delete
+When deleting an inode, we first had to locate the file. To do this, we first sperated the path string into the directory and the filename using our seperatePathAndName() function. After this, we found the inode using our findDNODE() function. By setting the delete flag with this function, the direntry and the corresponding dirents and indirects were cleaned up in the parent directory. Next, we used the resturned inode and its returned blockNum to free all data blocks, and then free the inode block itself. 
+
+vfs_rename
+When renaming a node, we first had to locate the inode or dnode's direntry. To do this, we first sperated the "from" string into the directory and the nodename using our seperatePathAndName() function. Next, we sperated the "to" string into the directory and the new nodename using our seperatePathAndName() function. We then made sure that the parent directories for the old and new names were the same. After this, we found the node using our findDNODE() function. By setting the rename flag with this function and passing in the new name, the direntry found to contain the matching node was renamed. By renaming in findDNODE(), we were able to make the renaming much more efficient by not searching twice. 
+
+vfs_chmod
+To change the mode for a file, we first had to locate the file. To do this, we first sperated the path into the directory and the filename using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function. Next, we find the file in this dnode using our getNODE() function. From here, we can edit the correct node and replace its mode with the new mode, finally writting it back to disk.
+
+vfs_chown
+To change the owner of a file, we first had to locate the file. To do this, we first sperated the path into the directory and the filename using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function. Next, we find the file in this dnode using our getNODE() function. From here, we can edit the correct node and replace its owner and group with the new owner and group, finally writting it back to disk.
+
+vfs_utimens
+To change the times of a file, we first had to locate the file. To do this, we first sperated the path into the directory and the filename using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function. Next, we find the file in this dnode using our getNODE() function. From here, we can edit the correct node and replace its modify and access time with the new modify and access time, finally writting it back to disk.
+
+vfs_truncate
+To truncate a file, we first had to locate the file. To do this, we first sperated the path into the directory and the filename using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function. Next, we find the file in this dnode using our getNODE() function. From here, we checked to make sure that the returned file was an inode and its size was greater than the offset. If this was true, we walked through the file until we got the the block after the offset block (offset/blocksize). We then freed all data blocks after this point. Finally, we set the inode size to the offset and wrote it to disk. 
+
+- Helper Functions
+
+seperatePathAndName
+This function is given a path char point and a blank name char pointer. Using the index of the last '/', it fills the path character array with the path and the name character array with the file name
+
+findDNODE
+This function recursively steps through the file system using a path string which it modifies as it goes. The function takes a dnode (the root dnode during the first time it is called), a dnode path, and a blocknum pointer that it can fill in when it finds the needed dnode. It searches a dnodes direntries to find another dnode with the next needed dnode and will then call itself with this dnode and shortened path. When it is called with a path of '' or '/' it returns because it has found the correct dnode (which is currently in *directory)
+
+getNODE
+This function takes a directory, a name, pointers to an inode and a dnode it can fill in if it finds one, a return blocknumber, and a few flags. The function searches in the given directory for a valid direntry with the smae name as the passed in name. If it find it, it will set either the inode or the dnode pointers to the block and return. Additionally, the function takes two flags which allows it to perform other actions when the correct direntry is found. If the delete flag is set, the direntry will be set to invalid, and the dirent and the indirents will be deleted if they need to be. The directoryBlock also must be passed in in this case so that it can be written to update its state. If the rename flag is set, the direntry wil be renamed with the passed in new name.
+
+getNextFree
+This function gets the next free block from the vcb. If no free blocks are available, it returns an error. It also updates the vcb with the next available free block for its free block list. 
+
+releaseFree
+Releases a block by adding it to the vcb's free list and setting it to valid, finally writing the now freeblock to disk.
+
+getName and setName
+Deals with direntries so that a name with 27 characters not including the null terminator can be stored in the 27 byte buffer. It also allows this buffer to be translated to a null terminated string. 
+
+bufdread and bufwrite
+Abstracts the details of the disk interface away by dealing with casting to BLOCKSIZE char arrays and handling disk errors. Later was used to implement a cache without needing to change any code within the file system API. 
+
+checkIntegrity
+TODO
+
+checkDNODE
+TODO
+
+checkINODE
+TODO 
+
+----------------------
+ Challenges Faced
+----------------------
+
+We faced a number of challenges while creating our inodes file system. The first was understanding and internalizing the fact that blocknum references to other blocks were not references themselves (pointers), but rather were locations on disk that had to be read in using dread. Additionally, all changes to blocks eventually had to be written back to disk to allow its changes to be permanent. This concept took a little while to get our head around.
+
+Another challenge we faced was creating an efficient code base without having huge amounts of duplicate code. We overcame this challenge by abstracting commonly used functions like all of the block creation and destruction, searching for nodes, and getting and freeing blocks from the free list into helper functions. These functions resulted in an API which both simplified our code base, made it more efficient, and made it much easier to write. In a few places, there does look like a large amount of duplicate code (vfs_create & vfs_mkdir), but this is necessary to allow for the differences between inodes and dnodes, such as the use of data blocks vs dirents. Abstracting some of this duplicate code could have been possible, but we made the decision early on that a small amount of duplicate code would be worth it if the code was easier to understand, modify, and use. 
+
+The single biggest challenged faced by Team America was indirection. This feature of inodes allows for theoretically infinite node storage, but brings a large array of challenges with it. Indirection made block references in Inodes and Dnodes much harder to program. Each time scanning over one of these nodes was necessary, functionality to scan over the direct blocks/dirents, the single indirect blocks/dirents, and the double indirect blocks/dirents had to be created. The two team meambers of Team America approached this challenge from different directions. Nathan based his scan on a series of conditional statements, while Nat based his scan on a more looping structure. In the end, it proved to be the edges of indirection that were the hardest to perfect, but with a large amount of testing, all bugs from indirection were removed.
+
+----------------------
+ Properties/Features
+----------------------
+
+We made a fully featured Inode based file system. This system allows for mounting, unmounting, getting attributes, creating files, reading from files, writing to files, truncating files, deleting files, reading a directory, creating a directory, changing the owner, group, and mode of a file, and updating metadata times. All of these API calls allowed for a well functioning file system which has all the features users expect from a file system.  
+
+For extra credit, we implemented the ability to create and traverse multiple directories. This provided the challenge of both writing the mkdir function and making our findDNODE search recursively over dnodes. By making findDNODE recursive, we were able to accurately locate the current dnode no matter how deep in the directory structure it was located. Once this was implemented, our file system was truly usable. 
+
+To cut down on the level of our disk reads, which take incredibly more time than memory reads, we implemented a 50KB cache (512 B/block * 100 blocks). Because we had already abstracted disk reads and writes away into our bufdread and bufdwrite functions (which allowed for unified error checking and buffered reading and writing), adding in a cache was simple. To do this, we created the cache memory itself, and two arrays with elements corresponding to blocks entries in the cache. The first array held the blockNums for each of the block entries in the cache. The second held the priority of each entry in the cache, allowing us to implement an effective LRU cache. When comparing the cache performance to the uncached performance, in one test where we created 100 files and read the directory three times, we found a drop from 192,566 reads from disk when uncached to only 109 reads. This huge improvement proved we had succeeded with our cache. 
+
+Integrity checking
+TODO
+
+----------------------
+ Testing Procedure
+----------------------
+
+We based our testing on the provided test but as our file system was split into different API functions, it was easy to debug and test those individually as we implemented them to ensure the components of our file systems were working as expected. During these tests we heavily used GDB to debug edge cases that we thought of and saw. To perform this testing, we found that we needed to run the file system in gdb in one shell, and then traverse/ interact with the file system in another shell. Combining this process with a liberal use of hexdumping the disk allowed us to fully understand how our file system reacted to different actions, and where it was performing correctly and incorrectly. Throughout development we also modified the provided test to allow us to automatically test various specific cases. Additionally, we integrated git into our workflow as it provided a convenient tool for our workflow. In total we had ~150 commits. 
+
+----------------------
+ Bald Eagle
+----------------------
+
+                               /T /I
+                              / |/ | .-~/
+                          T\ Y  I  |/  /  _
+         /T               | \I  |  I  Y.-~/
+        I l   /I       T\ |  |  l  |  T  /
+     T\ |  \ Y l  /T   | \I  l   \ `  l Y
+ __  | \l   \l  \I l __l  l   \   `  _. |
+ \ ~-l  `\   `\  \  \\ ~\  \   `. .-~   |
+  \   ~-. "-.  `  \  ^._ ^. "-.  /  \   |
+.--~-._  ~-  `  _  ~-_.-"-." ._ /._ ." ./
+ >--.  ~-.   ._  ~>-"    "\\   7   7   ]
+^.___~"--._    ~-{  .-~ .  `\ Y . /    |
+ <__ ~"-.  ~       /_/   \   \I  Y   : |
+   ^-.__           ~(_/   \   >._:   | l______
+       ^--.,___.-~"  /_/   !  `-.~"--l_ /     ~"-.
+              (_/ .  ~(   /'     "~"--,Y   -=b-. _)
+               (_/ .  \  :           / l      c"~o \
+                \ /    `.    .     .^   \_.-~"~--.  )
+                 (_/ .   `  /     /       !       )/
+                  / / _.   '.   .':      /        '
+                  ~(_/ .   /    _  `  .-<_
+                    /_/ . ' .-~" `.  / \  \          ,z=.
+                    ~( /   '  :   | K   "-.~-.______//
+                      "-,.    l   I/ \_    __{--->._(==.
+                       //(     \  <    ~"~"     //
+                      /' /\     \  \     ,v=.  ((
+                    .^. / /\     "  }__ //===-  `
+                   / / ' '  "-.,__ {---(==-
+                 .^ '       :  T  ~"   ll      
+                / .  .  . : | :!        \\			- Team America
+               (_/  /   | | j-"          ~^
+                 ~-<_(_.^-~"

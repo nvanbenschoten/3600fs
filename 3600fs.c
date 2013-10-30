@@ -51,13 +51,11 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 	// Do not touch or move this code; connects the disk
 	dconnect();
 
-	/* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
-		AND LOAD ANY DATA STRUCTURES INTO MEMORY */
-
+	// Initialize the cache
 	initCache();
 
+	// Read the vcb in from disk
 	v = vcb_create(0, "");
-
 	bufdread(0, (char *)v, sizeof(vcb));
 
 	// Check integrity of vcb
@@ -85,10 +83,6 @@ static void vfs_unmount (void *private_data) {
 	UNUSED(private_data);
 
 	fprintf(stderr, "vfs_unmount called\n");
-
-	/* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
-		ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
-		KEEP DATA CACHED THAT'S NOT ON DISK */
 
 	// update vcb with dirty bit
 	v->dirty = 0;
@@ -168,6 +162,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	// Check to see if match is valid
 	if (ret < 0) {
+		// If not, file not found
 		dnode_free(matchd);
 		inode_free(matchi);
 		free(pathcpy);
@@ -236,6 +231,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 		return -1;
 	}
 
+	// Assures proper name length
 	if(strlen(name) > 27) {
 		printf("File name too long\n");
 		free(pathcpy);
@@ -811,6 +807,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		return -1;
 	}
 
+	// Assures proper name length
 	if(strlen(name) > 27) {
 		printf("File name too long\n");
 		free(pathcpy);
@@ -1836,9 +1833,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
  */
 static int vfs_delete(const char *path)
 {
-	/* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
-			AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-
 	// Move down path
 	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
@@ -2048,6 +2042,7 @@ static int vfs_rename(const char *from, const char *to)
 		}
 	}
 
+	// Assures proper name length
 	if (strlen(newName) > 27) {
 		printf("Error new filename too long\n");
 		free(pathcpy);
