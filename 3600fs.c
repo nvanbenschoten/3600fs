@@ -3246,6 +3246,8 @@ int checkDNODE(dnode *d, int block) {
 
 						actual_size++;
 
+
+						// If the node is marked invalid, should it still call these recursive functions???
 						if (de->entries[i].type == 0) { // is a dnode
 							bufdread(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
 							if (block != de->entries[i].block.block && strcmp(de->entries[i].name, "..")) {

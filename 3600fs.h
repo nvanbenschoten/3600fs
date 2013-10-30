@@ -19,6 +19,10 @@
 
 #define UNUSED(x) (void)(x)
 
+#define DIRENT_NUM 16
+#define DIRECTS 110
+#define INDIRECTS 128
+
 extern const int DISKNUMBER;
 
 // Defining structures
@@ -54,13 +58,13 @@ typedef struct dnode_t {
 	struct timespec modify_time;
 	struct timespec create_time;
 	// the locations of the directory entry blocks
-	blocknum direct[110]; 
+	blocknum direct[DIRECTS]; 
 	blocknum single_indirect;
 	blocknum double_indirect;
 } dnode;
 
 typedef struct indirect_t {
-	blocknum blocks[128];
+	blocknum blocks[INDIRECTS];
 } indirect;
 
 typedef struct direntry_t {
@@ -73,7 +77,7 @@ typedef struct direntry_t {
 } direntry;
 
 typedef struct dirent_t {
-	direntry entries[16];
+	direntry entries[DIRENT_NUM];
 } dirent;
 
 typedef struct inode_t {
@@ -86,7 +90,7 @@ typedef struct inode_t {
 	struct timespec modify_time;
 	struct timespec create_time;
 	// the locations of the file data blocks
-	blocknum direct[110];
+	blocknum direct[DIRECTS];
 	blocknum single_indirect;
 	blocknum double_indirect;
 } inode;
