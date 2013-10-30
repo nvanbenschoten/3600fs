@@ -66,10 +66,10 @@ vfs_create
 When creating a new file, we first had to locate where the inode should be stored. To do this, we first sperated the path string into the directory and the new file name using our seperatePathAndName() function. After this, we find the dnode using our findDNODE() function to find the parent directory. Next, we use our getNODE() function to make sure the inode doesnt already exist. From here, we find the first available free direntry in the parent dnode and write our new blockNum to it. We then wrote a new inode to this blocknum on disk. 
 
 vfs_read
-When reading a file we first calculate the block to start reading in and check whether the offset given is actually valid. We then work from that point, copying data from the blocks and switching levels of indirection as needed. To do this we maintain a list of blocks to be read and switch indirection levels when that list has all been read through.
+When reading a file we first calculate the block to start reading in and check whether the offset given is actually valid. We then work from that point, copying data from the blocks and switching levels of indirection as needed. To do this we maintain a list of blocks to be read and switch indirection levels when that list has been read through.
 
 vfs_write
-When writing data to a file, we first calculate the block to start writing data. We then use a main loop that goes through the file as needed, writing the data and switching levels of indirection. This loop actually starts at the end of the current file, and writes all zeroes until it gets to the offset requested by write. From there it copies over the requested data using a similar method to read.
+When writing data to a file, we first calculate the block to start writing data. We then use a main loop that goes through the file as needed, writing the data and switching levels of indirection. This loop actually starts at the end of the current file, and writes all zeroes until it gets to the offset requested by write. From there it copies over the requested data using a similar method to read, and erroring if the disk runs out of space.
 
 vfs_delete
 When deleting an inode, we first had to locate the file. To do this, we first sperated the path string into the directory and the filename using our seperatePathAndName() function. After this, we found the inode using our findDNODE() function. By setting the delete flag with this function, the direntry and the corresponding dirents and indirects were cleaned up in the parent directory. Next, we used the resturned inode and its returned blockNum to free all data blocks, and then free the inode block itself. 
@@ -113,13 +113,13 @@ bufdread and bufwrite
 Abstracts the details of the disk interface away by dealing with casting to BLOCKSIZE char arrays and handling disk errors. Later was used to implement a cache without needing to change any code within the file system API. 
 
 checkIntegrity
-TODO
+Performs a basic integrity check of the disk. This is called when the disk was not unmounted safely. The integrity check is done by first recording the locations of all known free blocks. We then traverse all dnodes and inodes, either recording their positions or marking them as invalid if there is a conflict with the free block list. Within inodes we check all data blocks and mark those as well. Finally we check for blocks that were not marked as either, and assume that those can be readded to the free list as they are not referenced by anything.
 
 checkDNODE
-TODO
+Recursively checks through all dnodes, marking their status and fixing blocks that are already in the free list. This also updates the size of the dnode. This also calls checkINODE when it encounters an inode direntry.
 
 checkINODE
-TODO 
+Goes through an inode and checks all of its data blocks marking their status and fixing blocks that are already in the free list. At the end the size of the inode is also updated if it needs to be.
 
 ----------------------
  Challenges Faced
@@ -141,8 +141,7 @@ For extra credit, we implemented the ability to create and traverse multiple dir
 
 To cut down on the level of our disk reads, which take incredibly more time than memory reads, we implemented a 50KB cache (512 B/block * 100 blocks). Because we had already abstracted disk reads and writes away into our bufdread and bufdwrite functions (which allowed for unified error checking and buffered reading and writing), adding in a cache was simple. To do this, we created the cache memory itself, and two arrays with elements corresponding to blocks entries in the cache. The first array held the blockNums for each of the block entries in the cache. The second held the priority of each entry in the cache, allowing us to implement an effective LRU cache. When comparing the cache performance to the uncached performance, in one test where we created 100 files and read the directory three times, we found a drop from 192,566 reads from disk when uncached to only 109 reads. This huge improvement proved we had succeeded with our cache. 
 
-Integrity checking
-TODO
+If a disk was not unmounted safely upon its last use, we perform an integrity check at mount. This consists of cataloging free blocks and blocks we know are in use on the disk. We then look for contradictions in those lists and blocks that have not been cataloged and add those to the free list, updating file and directory nodes as necessary. This returns the disk to a usable state for the end user, though some data may be lost depending on when the disk was unmounted. This is important because otherwise our entire disk would be useless if it was not safely unmounted.
 
 ----------------------
  Testing Procedure
