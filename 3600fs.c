@@ -3246,7 +3246,7 @@ int checkDNODE(dnode *d, int block) {
 												if (de->entries[i].type == 0) { // is a dnode
 														bufdread(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
 														if (block != de->entries[i].block.block && strcmp(de->entries[i].name, "..")) {
-															checkDNODE(d_next);
+															checkDNODE(d_next, de->entries[i].block.block);
 															bufdwrite(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
 														}
 												}
