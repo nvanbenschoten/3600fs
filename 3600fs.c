@@ -67,11 +67,11 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 	}
 
 	if (v->dirty) {
-                num_blocks = v->blocks;
-                disk_status = (char *) calloc(num_blocks, sizeof(char));
+				num_blocks = v->blocks;
+				disk_status = (char *) calloc(num_blocks, sizeof(char));
 		// Perform integrity check
-                checkIntegrity();
-                free(disk_status);
+				checkIntegrity();
+				free(disk_status);
 	}
 
 	// update vcb with dirty bit
@@ -282,298 +282,298 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 		dnode_free(temp_d);
 		inode_free(temp_i);
 	}
-        
-    // while we havent found a dirent
-    int dnode_block = -1;
-    int i = 0, j = 0, ent_b = 0, lvl = 0;
-    int dirents = 110;
-    int fr;
-    indirect *indr = indirect_create();
-    indirect *indr2 = indirect_create();
-    dirent *de = dirent_create();
-    dirent *de_new = dirent_create();
-    blocknum * dbs = d->direct;
-    dnode * d_new = dnode_create(2, geteuid(), getegid(), mode);
+		
+	// while we havent found a dirent
+	int dnode_block = -1;
+	int i = 0, j = 0, ent_b = 0, lvl = 0;
+	int dirents = 110;
+	int fr;
+	indirect *indr = indirect_create();
+	indirect *indr2 = indirect_create();
+	dirent *de = dirent_create();
+	dirent *de_new = dirent_create();
+	blocknum * dbs = d->direct;
+	dnode * d_new = dnode_create(2, geteuid(), getegid(), mode);
 
-    // create new inode metadata block, WITHOUT DATA block to go with it
-    clock_gettime(CLOCK_REALTIME, &(d_new->create_time));
-    clock_gettime(CLOCK_REALTIME, &(d_new->access_time));
-    clock_gettime(CLOCK_REALTIME, &(d_new->modify_time));
-    d_new->direct[0] = blocknum_create(0, 0);
-    d_new->single_indirect = blocknum_create(0, 0);
-    d_new->double_indirect = blocknum_create(0, 0);
+	// create new inode metadata block, WITHOUT DATA block to go with it
+	clock_gettime(CLOCK_REALTIME, &(d_new->create_time));
+	clock_gettime(CLOCK_REALTIME, &(d_new->access_time));
+	clock_gettime(CLOCK_REALTIME, &(d_new->modify_time));
+	d_new->direct[0] = blocknum_create(0, 0);
+	d_new->single_indirect = blocknum_create(0, 0);
+	d_new->double_indirect = blocknum_create(0, 0);
 
-    while (dnode_block == -1) { // while we havent found a dirent for the inode
-            if (ent_b < dirents) { // if we have more dirents to look through
-                    if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
-                            bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
-                            for (i = 0; i < 16; i++) { // look through the direntries
-                                    if (!de->entries[i].block.valid) { // if any of the entries are invalid
-                                            // meaning we can use them to write to
-                                            //strcpy(de->entries[i].name, name); 
-                                            setName(&de->entries[i], name); // write to them
-                                            de->entries[i].type = 0; // 0 = dir
-                                            if ((fr = getNextFree(v)) >= 0) {
-                                                    de->entries[i].block = blocknum_create(fr, 1);
-                                            }
-                                            else {
-                                                    printf("Error: No disk space available.\n");
-                                                    free(d);
-                                                    free(indr);
-                                                    free(indr2);
-                                                    free(de);
-                                                    free(de_new);
-                                                    free(d_new);
-                                                    free(pathcpy);
-                                                    free(name);
-                                                    return -ENOSPC;
-                                            }
-                                            dnode_block = de->entries[i].block.block; // set inode
-                                            bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
-                                            break;
-                                    }
-                            }
-                    }
-                    else { // we need to use this dirent for our inode
-                            // set to valid and make it an actual blocknum cause no guarantees
-                            if ((fr = getNextFree(v)) >= 0) {
-                                    dbs[ent_b] = blocknum_create(fr, 1); // write new blocknum as valid
-                            }
-                            else {
-                                    printf("Error: No disk space available.\n");
-                                    free(d);
-                                    free(indr);
-                                    free(indr2);
-                                    free(de);
-                                    free(de_new);
-                                    free(d_new);
-                                    free(pathcpy);
-                                    free(name);
-                                    return -ENOSPC;
-                            }
-                            //strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
-                            setName(&de_new->entries[0], name); // write to them
-                            de_new->entries[0].type = 0;
-                            if ((fr = getNextFree(v)) >= 0) {
-                                    de_new->entries[0].block = blocknum_create(fr, 1);
-                            }
-                            else {
-                                    printf("Error: No disk space available.\n");
-                                    free(d);
-                                    free(indr);
-                                    free(indr2);
-                                    free(de);
-                                    free(de_new);
-                                    free(d_new);
-                                    free(pathcpy);
-                                    free(name);
-                                    return -ENOSPC;
-                            }
-                            // write dirent
-                            bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
-                            dnode_block = de_new->entries[0].block.block; // set inode blocknum 
-                    }
-                    ent_b++; 
-            }
-            else if (lvl == 0) { // we need to move to single_indirect block
-                    if (d->single_indirect.valid) { // blocknum is valid so can just use it
-                            bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
-                    }
-                    else { // need to actually create blocknum etc
-                            if ((fr = getNextFree(v)) >= 0) {
-                                    d->single_indirect = blocknum_create(fr, 1);
-                            }
-                            else {
-                                    printf("Error: No disk space available.\n");
-                                    free(d);
-                                    free(indr);
-                                    free(indr2);
-                                    free(de);
-                                    free(de_new);
-                                    free(d_new);
-                                    free(pathcpy);
-                                    free(name);
-                                    return -ENOSPC;
-                            }
-                            indr->blocks[0] = blocknum_create(0, 0);
-                    }
-                    ent_b = 0;
-                    dirents = 128;
-                    dbs = indr->blocks;
-                    lvl++;
-            }
-            else if (lvl == 1) { // we need to move to double_indirect block
-                    if (d->double_indirect.valid) { // if blocknum valid
-                            bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect)); // can use it
-                            if (indr2->blocks[0].valid) { // if 2nd level valid
-                                    bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
-                            }
-                            else { // need to update both levels
-                                    if ((fr = getNextFree(v)) >= 0) {
-                                            indr2->blocks[0] = blocknum_create(fr, 1);
-                                    }
-                                    else {
-                                            printf("Error: No disk space available.\n");
-                                            free(d);
-                                            free(indr);
-                                            free(indr2);
-                                            free(de);
-                                            free(de_new);
-                                            free(d_new);
-                                            free(pathcpy);
-                                            free(name);
-                                            return -ENOSPC;
-                                    }
-                                    free(indr);
-                                    indr = indirect_create();
-                                    indr->blocks[0] = blocknum_create(0, 0);
-                                    bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
-                            }
-                    }
-                    else { // not valid so need to setup 1st and 2nd levels
-                            if ((fr = getNextFree(v)) >= 0) {
-                                    d->double_indirect = blocknum_create(fr, 1);
-                            }
-                            else {
-                                    printf("Error: No disk space available.\n");
-                                    free(d);
-                                    free(indr);
-                                    free(indr2);
-                                    free(de);
-                                    free(de_new);
-                                    free(d_new);
-                                    free(pathcpy);
-                                    free(name);
-                                    return -ENOSPC;
-                            }
-                            if ((fr = getNextFree(v)) >= 0) {
-                                    indr2->blocks[0] = blocknum_create(fr, 1);
-                            }
-                            else {
-                                    printf("Error: No disk space available.\n");
-                                    free(d);
-                                    free(indr);
-                                    free(indr2);
-                                    free(de);
-                                    free(de_new);
-                                    free(d_new);
-                                    free(pathcpy);
-                                    free(name);
-                                    return -ENOSPC;
-                            }
-                            free(indr);
-                            indr = indirect_create();
-                            indr->blocks[0] = blocknum_create(0, 0);
-                            bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
-                    }
-                    ent_b = 0;
-                    j = 0;
-                    dirents = 128;
-                    dbs = indr->blocks;
-                    lvl++;
-            }
-            else if (lvl == 2) { // else we are already in second level of indirection
-                    j++;
-                    if (j < 128) { // if there are still indirects to check
-                            if (indr2->blocks[j].valid) { // if next first level indirect is usable
-                                    bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                            }
-                            else { // otherwise need to setup blank indr
-                                    if ((fr = getNextFree(v)) >= 0) {
-                                            indr2->blocks[j] = blocknum_create(fr, 1);
-                                    }
-                                    else {
-                                            printf("Error: No disk space available.\n");
-                                            free(d);
-                                            free(indr);
-                                            free(indr2);
-                                            free(de);
-                                            free(de_new);
-                                            free(d_new);
-                                            free(pathcpy);
-                                            free(name);
-                                            return -ENOSPC;
-                                    }
-                                    free(indr);
-                                    indr = indirect_create();
-                                    indr->blocks[0] = blocknum_create(0, 0);
-                                    bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                            }
-                            ent_b = 0;
-                            dirents = 128;
-                            dbs = indr->blocks;
-                    }
-                    else { // we have run out of indirection space
-                            lvl++;
-                    }
-            }
-            else { // we need to return an error because there is no more room for dirents
-                    // free stuff
-                    free(d);
-                    free(indr);
-                    free(indr2);
-                    free(de);
-                    free(de_new);
-                    free(d_new);
-                    free(pathcpy);
-		    free(name);
-                    // error and return
-                    printf("Error no directory entry available to create file.\n");
-                    return -1;
-            }
-    }
-    if (ent_b != 0) { // if we changed ent_b its off by one for final dbs comparison 
-            ent_b--;
-    }
-    
+	while (dnode_block == -1) { // while we havent found a dirent for the inode
+			if (ent_b < dirents) { // if we have more dirents to look through
+					if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
+							bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
+							for (i = 0; i < 16; i++) { // look through the direntries
+									if (!de->entries[i].block.valid) { // if any of the entries are invalid
+											// meaning we can use them to write to
+											//strcpy(de->entries[i].name, name); 
+											setName(&de->entries[i], name); // write to them
+											de->entries[i].type = 0; // 0 = dir
+											if ((fr = getNextFree(v)) >= 0) {
+													de->entries[i].block = blocknum_create(fr, 1);
+											}
+											else {
+													printf("Error: No disk space available.\n");
+													free(d);
+													free(indr);
+													free(indr2);
+													free(de);
+													free(de_new);
+													free(d_new);
+													free(pathcpy);
+													free(name);
+													return -ENOSPC;
+											}
+											dnode_block = de->entries[i].block.block; // set inode
+											bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
+											break;
+									}
+							}
+					}
+					else { // we need to use this dirent for our inode
+							// set to valid and make it an actual blocknum cause no guarantees
+							if ((fr = getNextFree(v)) >= 0) {
+									dbs[ent_b] = blocknum_create(fr, 1); // write new blocknum as valid
+							}
+							else {
+									printf("Error: No disk space available.\n");
+									free(d);
+									free(indr);
+									free(indr2);
+									free(de);
+									free(de_new);
+									free(d_new);
+									free(pathcpy);
+									free(name);
+									return -ENOSPC;
+							}
+							//strcpy(de_new->entries[0].name, name); // write new direnty to new dirent
+							setName(&de_new->entries[0], name); // write to them
+							de_new->entries[0].type = 0;
+							if ((fr = getNextFree(v)) >= 0) {
+									de_new->entries[0].block = blocknum_create(fr, 1);
+							}
+							else {
+									printf("Error: No disk space available.\n");
+									free(d);
+									free(indr);
+									free(indr2);
+									free(de);
+									free(de_new);
+									free(d_new);
+									free(pathcpy);
+									free(name);
+									return -ENOSPC;
+							}
+							// write dirent
+							bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
+							dnode_block = de_new->entries[0].block.block; // set inode blocknum 
+					}
+					ent_b++; 
+			}
+			else if (lvl == 0) { // we need to move to single_indirect block
+					if (d->single_indirect.valid) { // blocknum is valid so can just use it
+							bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
+					}
+					else { // need to actually create blocknum etc
+							if ((fr = getNextFree(v)) >= 0) {
+									d->single_indirect = blocknum_create(fr, 1);
+							}
+							else {
+									printf("Error: No disk space available.\n");
+									free(d);
+									free(indr);
+									free(indr2);
+									free(de);
+									free(de_new);
+									free(d_new);
+									free(pathcpy);
+									free(name);
+									return -ENOSPC;
+							}
+							indr->blocks[0] = blocknum_create(0, 0);
+					}
+					ent_b = 0;
+					dirents = 128;
+					dbs = indr->blocks;
+					lvl++;
+			}
+			else if (lvl == 1) { // we need to move to double_indirect block
+					if (d->double_indirect.valid) { // if blocknum valid
+							bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect)); // can use it
+							if (indr2->blocks[0].valid) { // if 2nd level valid
+									bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+							}
+							else { // need to update both levels
+									if ((fr = getNextFree(v)) >= 0) {
+											indr2->blocks[0] = blocknum_create(fr, 1);
+									}
+									else {
+											printf("Error: No disk space available.\n");
+											free(d);
+											free(indr);
+											free(indr2);
+											free(de);
+											free(de_new);
+											free(d_new);
+											free(pathcpy);
+											free(name);
+											return -ENOSPC;
+									}
+									free(indr);
+									indr = indirect_create();
+									indr->blocks[0] = blocknum_create(0, 0);
+									bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+							}
+					}
+					else { // not valid so need to setup 1st and 2nd levels
+							if ((fr = getNextFree(v)) >= 0) {
+									d->double_indirect = blocknum_create(fr, 1);
+							}
+							else {
+									printf("Error: No disk space available.\n");
+									free(d);
+									free(indr);
+									free(indr2);
+									free(de);
+									free(de_new);
+									free(d_new);
+									free(pathcpy);
+									free(name);
+									return -ENOSPC;
+							}
+							if ((fr = getNextFree(v)) >= 0) {
+									indr2->blocks[0] = blocknum_create(fr, 1);
+							}
+							else {
+									printf("Error: No disk space available.\n");
+									free(d);
+									free(indr);
+									free(indr2);
+									free(de);
+									free(de_new);
+									free(d_new);
+									free(pathcpy);
+									free(name);
+									return -ENOSPC;
+							}
+							free(indr);
+							indr = indirect_create();
+							indr->blocks[0] = blocknum_create(0, 0);
+							bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+					}
+					ent_b = 0;
+					j = 0;
+					dirents = 128;
+					dbs = indr->blocks;
+					lvl++;
+			}
+			else if (lvl == 2) { // else we are already in second level of indirection
+					j++;
+					if (j < 128) { // if there are still indirects to check
+							if (indr2->blocks[j].valid) { // if next first level indirect is usable
+									bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+							}
+							else { // otherwise need to setup blank indr
+									if ((fr = getNextFree(v)) >= 0) {
+											indr2->blocks[j] = blocknum_create(fr, 1);
+									}
+									else {
+											printf("Error: No disk space available.\n");
+											free(d);
+											free(indr);
+											free(indr2);
+											free(de);
+											free(de_new);
+											free(d_new);
+											free(pathcpy);
+											free(name);
+											return -ENOSPC;
+									}
+									free(indr);
+									indr = indirect_create();
+									indr->blocks[0] = blocknum_create(0, 0);
+									bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+							}
+							ent_b = 0;
+							dirents = 128;
+							dbs = indr->blocks;
+					}
+					else { // we have run out of indirection space
+							lvl++;
+					}
+			}
+			else { // we need to return an error because there is no more room for dirents
+					// free stuff
+					free(d);
+					free(indr);
+					free(indr2);
+					free(de);
+					free(de_new);
+					free(d_new);
+					free(pathcpy);
+			free(name);
+					// error and return
+					printf("Error no directory entry available to create file.\n");
+					return -1;
+			}
+	}
+	if (ent_b != 0) { // if we changed ent_b its off by one for final dbs comparison 
+			ent_b--;
+	}
+	
 
-    // New directory dirent
-    if ((fr = getNextFree(v)) >= 0) {
-            d_new->direct[0] = blocknum_create(fr, 1);
-    }
-    else {
-            printf("Error: No disk space available.\n");
-            free(d);
-            free(indr);
-            free(indr2);
-            free(de);
-            free(de_new);
-            free(d_new);
-            free(pathcpy);
-            free(name);
-            return -ENOSPC;
-    }
-    dirent * de_in = dirent_create();
-    de_in->entries[0] = direntry_create(".", 0, blocknum_create(dnode_block, 1));
-    de_in->entries[1] = direntry_create("..", 0, blocknum_create(dirBlock.block, 1));
+	// New directory dirent
+	if ((fr = getNextFree(v)) >= 0) {
+			d_new->direct[0] = blocknum_create(fr, 1);
+	}
+	else {
+			printf("Error: No disk space available.\n");
+			free(d);
+			free(indr);
+			free(indr2);
+			free(de);
+			free(de_new);
+			free(d_new);
+			free(pathcpy);
+			free(name);
+			return -ENOSPC;
+	}
+	dirent * de_in = dirent_create();
+	de_in->entries[0] = direntry_create(".", 0, blocknum_create(dnode_block, 1));
+	de_in->entries[1] = direntry_create("..", 0, blocknum_create(dirBlock.block, 1));
 
-    bufdwrite(d_new->direct[0].block, (char *)de_in, sizeof(dirent));
-    dirent_free(de_in);
+	bufdwrite(d_new->direct[0].block, (char *)de_in, sizeof(dirent));
+	dirent_free(de_in);
 
-    bufdwrite(dnode_block, (char *) d_new, sizeof(dnode));
+	bufdwrite(dnode_block, (char *) d_new, sizeof(dnode));
 
-    d->size += 1;
-    // write DBS dependent on lvl... thank god this is the end
-    switch (lvl) {
-            case 0:
-                    d->direct[ent_b] = dbs[ent_b];
-                    bufdwrite(dirBlock.block, (char *) d, sizeof(dnode)); 
-                    break;
-            case 1:
-                    indr->blocks[ent_b] = dbs[ent_b];
-                    bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
-                    bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
-                    break;
+	d->size += 1;
+	// write DBS dependent on lvl... thank god this is the end
+	switch (lvl) {
+			case 0:
+					d->direct[ent_b] = dbs[ent_b];
+					bufdwrite(dirBlock.block, (char *) d, sizeof(dnode)); 
+					break;
+			case 1:
+					indr->blocks[ent_b] = dbs[ent_b];
+					bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
+					bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
+					break;
 
-            case 2: // j could be off by 1, but i dont think it is atm
-                    indr->blocks[ent_b] = dbs[ent_b];
-                    bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
-                    bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
-                    bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                    break;
-            // case 3 is probably necessary as if lvl = 3
-            // it means there was no space so should have returned with error already
-    }
+			case 2: // j could be off by 1, but i dont think it is atm
+					indr->blocks[ent_b] = dbs[ent_b];
+					bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
+					bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+					bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+					break;
+			// case 3 is probably necessary as if lvl = 3
+			// it means there was no space so should have returned with error already
+	}
 	// update vcb
 	bufdwrite(0, (char *) v, sizeof(vcb));
 
@@ -587,7 +587,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 	free(pathcpy);
 	free(name);
 
-  	return 0;
+	return 0;
 }
 
 /** Read directory
@@ -843,7 +843,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	dnode * temp_d = dnode_create(0, 0, 0, 0);
 	inode * temp_i = inode_create(0, 0, 0, 0);
 	blocknum block;
-        int fr;
+		int fr;
 	int ret = getNODE(d, name, temp_d, temp_i, &block, 0, 0, 0, "");
 	if (ret >= 0) { // there was an error so free and return
 		dnode_free(d);
@@ -857,271 +857,271 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		dnode_free(temp_d);
 		inode_free(temp_i);
 	}
-        
-        // while we havent found a dirent
-        int inode_block = -1;
-        int i = 0, j = 0, ent_b = 0, lvl = 0;
-        int dirents = 110;
-        indirect *indr = indirect_create();
-        indirect *indr2 = indirect_create();
-        dirent *de = dirent_create();
-        dirent *de_new = dirent_create();
-        blocknum * dbs = d->direct;
-        inode * i_new = inode_create(0, geteuid(), getegid(), mode);
+		
+		// while we havent found a dirent
+		int inode_block = -1;
+		int i = 0, j = 0, ent_b = 0, lvl = 0;
+		int dirents = 110;
+		indirect *indr = indirect_create();
+		indirect *indr2 = indirect_create();
+		dirent *de = dirent_create();
+		dirent *de_new = dirent_create();
+		blocknum * dbs = d->direct;
+		inode * i_new = inode_create(0, geteuid(), getegid(), mode);
 
-        // create new inode metadata block, WITHOUT DATA block to go with it
-        clock_gettime(CLOCK_REALTIME, &(i_new->create_time));
-        clock_gettime(CLOCK_REALTIME, &(i_new->access_time));
-        clock_gettime(CLOCK_REALTIME, &(i_new->modify_time));
-        i_new->direct[0] = blocknum_create(0, 0);
-        i_new->single_indirect = blocknum_create(0, 0);
-        i_new->double_indirect = blocknum_create(0, 0);
+		// create new inode metadata block, WITHOUT DATA block to go with it
+		clock_gettime(CLOCK_REALTIME, &(i_new->create_time));
+		clock_gettime(CLOCK_REALTIME, &(i_new->access_time));
+		clock_gettime(CLOCK_REALTIME, &(i_new->modify_time));
+		i_new->direct[0] = blocknum_create(0, 0);
+		i_new->single_indirect = blocknum_create(0, 0);
+		i_new->double_indirect = blocknum_create(0, 0);
 
-        while (inode_block == -1) { // while we havent found a dirent for the inode
-                if (ent_b < dirents) { // if we have more dirents to look through
-                        if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
-                                bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
-                                for (i = 0; i < 16; i++) { // look through the direntries
-                                        if (!de->entries[i].block.valid) { // if any of the entries are invalid
-                                                // meaning we can use them to write to
-                                                setName(&de->entries[i], name); // write to them
-                                                de->entries[i].type = 1; // 1 = file
-                                                if ((fr = getNextFree(v)) >= 0) {
-                                                        de->entries[i].block = blocknum_create(fr, 1);
-                                                }
-                                                else {
-                                                        printf("Error: No disk space available.\n");
-                                                        free(d);
-                                                        free(indr);
-                                                        free(indr2);
-                                                        free(de);
-                                                        free(de_new);
-                                                        free(i_new);
-                                                        free(pathcpy);
-                                                        free(name);
-                                                        return -ENOSPC;
-                                                }
-                                                inode_block = de->entries[i].block.block; // set inode
-                                                bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
-                                                break;
-                                        }
-                                }
-                        }
-                        else { // we need to use this dirent for our inode
-                                // set to valid and make it an actual blocknum cause no guarantees
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        dbs[ent_b] = blocknum_create(fr, 1); // write new blocknum as valid
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        free(d);
-                                        free(indr);
-                                        free(indr2);
-                                        free(de);
-                                        free(de_new);
-                                        free(i_new);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
-                                setName(&de_new->entries[0], name); // write new direnty to new dirent
-                                de_new->entries[0].type = 1;
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        de_new->entries[0].block = blocknum_create(fr, 1);
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        free(d);
-                                        free(indr);
-                                        free(indr2);
-                                        free(de);
-                                        free(de_new);
-                                        free(i_new);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
-                                // write dirent
-                                bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
-                                inode_block = de_new->entries[0].block.block; // set inode blocknum 
-                        }
-                        ent_b++; 
-                }
-                else if (lvl == 0) { // we need to move to single_indirect block
-                        if (d->single_indirect.valid) { // blocknum is valid so can just use it
-                                bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
-                        }
-                        else { // need to actually create blocknum etc
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        d->single_indirect = blocknum_create(fr, 1);
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        free(d);
-                                        free(indr);
-                                        free(indr2);
-                                        free(de);
-                                        free(de_new);
-                                        free(i_new);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
-                                indr->blocks[0] = blocknum_create(0, 0);
-                        }
-                        ent_b = 0;
-                        dirents = 128;
-                        dbs = indr->blocks;
-                        lvl++;
-                }
-                else if (lvl == 1) { // we need to move to double_indirect block
-                        if (d->double_indirect.valid) { // if blocknum valid
-                                bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect)); // can use it
-                                if (indr2->blocks[0].valid) { // if 2nd level valid
-                                        bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
-                                }
-                                else { // need to update both levels
-                                        if ((fr = getNextFree(v)) >= 0) {
-                                                indr2->blocks[0] = blocknum_create(fr, 1);
-                                        }
-                                        else {
-                                                printf("Error: No disk space available.\n");
-                                                free(d);
-                                                free(indr);
-                                                free(indr2);
-                                                free(de);
-                                                free(de_new);
-                                                free(i_new);
-                                                free(pathcpy);
-                                                free(name);
-                                                return -ENOSPC;
-                                        }
-                                        free(indr);
-                                        indr = indirect_create();
-                                        indr->blocks[0] = blocknum_create(0, 0);
-                                        bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
-                                }
-                        }
-                        else { // not valid so need to setup 1st and 2nd levels
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        d->double_indirect = blocknum_create(fr, 1);
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        free(d);
-                                        free(indr);
-                                        free(indr2);
-                                        free(de);
-                                        free(de_new);
-                                        free(i_new);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        indr2->blocks[0] = blocknum_create(fr, 1);
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        free(d);
-                                        free(indr);
-                                        free(indr2);
-                                        free(de);
-                                        free(de_new);
-                                        free(i_new);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
-                                free(indr);
-                                indr = indirect_create();
-                                indr->blocks[0] = blocknum_create(0, 0);
-                                bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
-                        }
-                        ent_b = 0;
-                        j = 0;
-                        dirents = 128;
-                        dbs = indr->blocks;
-                        lvl++;
-                }
-                else if (lvl == 2) { // we need to move within the second indirect entries
-                        j++;
-                        if (j != 128) {
-                                if (indr2->blocks[j].valid) {
-                                        bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                }
-                                else { // need to setup blank indr
-                                        if ((fr = getNextFree(v)) >= 0) {
-                                                indr2->blocks[j] = blocknum_create(fr, 1);
-                                        }
-                                        else {
-                                                printf("Error: No disk space available.\n");
-                                                free(d);
-                                                free(indr);
-                                                free(indr2);
-                                                free(de);
-                                                free(de_new);
-                                                free(i_new);
-                                                free(pathcpy);
-                                                free(name);
-                                                return -ENOSPC;
-                                        }
-                                        free(indr);
-                                        indr = indirect_create();
-                                        indr->blocks[0] = blocknum_create(0, 0);
-                                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                }
-                                ent_b = 0;
-                                dirents = 128;
-                                dbs = indr->blocks;
-                        }
-                        else {
-                                lvl++;
-                        }
-                }
-                else { // we need to return an error because there is no more room for dirents
-                        // free stuff
-                        free(d);
-                        free(indr);
-                        free(indr2);
-                        free(de);
-                        free(de_new);
-                        free(i_new);
-                        free(pathcpy);
+		while (inode_block == -1) { // while we havent found a dirent for the inode
+				if (ent_b < dirents) { // if we have more dirents to look through
+						if (dbs[ent_b].valid) { // if the entry is valid we have to look through it
+								bufdread(dbs[ent_b].block, (char *) de, sizeof(dirent)); // get the next dirent
+								for (i = 0; i < 16; i++) { // look through the direntries
+										if (!de->entries[i].block.valid) { // if any of the entries are invalid
+												// meaning we can use them to write to
+												setName(&de->entries[i], name); // write to them
+												de->entries[i].type = 1; // 1 = file
+												if ((fr = getNextFree(v)) >= 0) {
+														de->entries[i].block = blocknum_create(fr, 1);
+												}
+												else {
+														printf("Error: No disk space available.\n");
+														free(d);
+														free(indr);
+														free(indr2);
+														free(de);
+														free(de_new);
+														free(i_new);
+														free(pathcpy);
+														free(name);
+														return -ENOSPC;
+												}
+												inode_block = de->entries[i].block.block; // set inode
+												bufdwrite(dbs[ent_b].block, (char *) de, sizeof(dirent));
+												break;
+										}
+								}
+						}
+						else { // we need to use this dirent for our inode
+								// set to valid and make it an actual blocknum cause no guarantees
+								if ((fr = getNextFree(v)) >= 0) {
+										dbs[ent_b] = blocknum_create(fr, 1); // write new blocknum as valid
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										free(d);
+										free(indr);
+										free(indr2);
+										free(de);
+										free(de_new);
+										free(i_new);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
+								setName(&de_new->entries[0], name); // write new direnty to new dirent
+								de_new->entries[0].type = 1;
+								if ((fr = getNextFree(v)) >= 0) {
+										de_new->entries[0].block = blocknum_create(fr, 1);
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										free(d);
+										free(indr);
+										free(indr2);
+										free(de);
+										free(de_new);
+										free(i_new);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
+								// write dirent
+								bufdwrite(dbs[ent_b].block, (char *) de_new, sizeof(dirent));
+								inode_block = de_new->entries[0].block.block; // set inode blocknum 
+						}
+						ent_b++; 
+				}
+				else if (lvl == 0) { // we need to move to single_indirect block
+						if (d->single_indirect.valid) { // blocknum is valid so can just use it
+								bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
+						}
+						else { // need to actually create blocknum etc
+								if ((fr = getNextFree(v)) >= 0) {
+										d->single_indirect = blocknum_create(fr, 1);
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										free(d);
+										free(indr);
+										free(indr2);
+										free(de);
+										free(de_new);
+										free(i_new);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
+								indr->blocks[0] = blocknum_create(0, 0);
+						}
+						ent_b = 0;
+						dirents = 128;
+						dbs = indr->blocks;
+						lvl++;
+				}
+				else if (lvl == 1) { // we need to move to double_indirect block
+						if (d->double_indirect.valid) { // if blocknum valid
+								bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect)); // can use it
+								if (indr2->blocks[0].valid) { // if 2nd level valid
+										bufdread(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+								}
+								else { // need to update both levels
+										if ((fr = getNextFree(v)) >= 0) {
+												indr2->blocks[0] = blocknum_create(fr, 1);
+										}
+										else {
+												printf("Error: No disk space available.\n");
+												free(d);
+												free(indr);
+												free(indr2);
+												free(de);
+												free(de_new);
+												free(i_new);
+												free(pathcpy);
+												free(name);
+												return -ENOSPC;
+										}
+										free(indr);
+										indr = indirect_create();
+										indr->blocks[0] = blocknum_create(0, 0);
+										bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+								}
+						}
+						else { // not valid so need to setup 1st and 2nd levels
+								if ((fr = getNextFree(v)) >= 0) {
+										d->double_indirect = blocknum_create(fr, 1);
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										free(d);
+										free(indr);
+										free(indr2);
+										free(de);
+										free(de_new);
+										free(i_new);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
+								if ((fr = getNextFree(v)) >= 0) {
+										indr2->blocks[0] = blocknum_create(fr, 1);
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										free(d);
+										free(indr);
+										free(indr2);
+										free(de);
+										free(de_new);
+										free(i_new);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
+								free(indr);
+								indr = indirect_create();
+								indr->blocks[0] = blocknum_create(0, 0);
+								bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+						}
+						ent_b = 0;
+						j = 0;
+						dirents = 128;
+						dbs = indr->blocks;
+						lvl++;
+				}
+				else if (lvl == 2) { // we need to move within the second indirect entries
+						j++;
+						if (j != 128) {
+								if (indr2->blocks[j].valid) {
+										bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+								}
+								else { // need to setup blank indr
+										if ((fr = getNextFree(v)) >= 0) {
+												indr2->blocks[j] = blocknum_create(fr, 1);
+										}
+										else {
+												printf("Error: No disk space available.\n");
+												free(d);
+												free(indr);
+												free(indr2);
+												free(de);
+												free(de_new);
+												free(i_new);
+												free(pathcpy);
+												free(name);
+												return -ENOSPC;
+										}
+										free(indr);
+										indr = indirect_create();
+										indr->blocks[0] = blocknum_create(0, 0);
+										bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+								}
+								ent_b = 0;
+								dirents = 128;
+								dbs = indr->blocks;
+						}
+						else {
+								lvl++;
+						}
+				}
+				else { // we need to return an error because there is no more room for dirents
+						// free stuff
+						free(d);
+						free(indr);
+						free(indr2);
+						free(de);
+						free(de_new);
+						free(i_new);
+						free(pathcpy);
 			free(name);
-                        // error and return
-                        printf("Error no directory entry available to create file.\n");
-                        return -1;
-                }
-        }
-        if (ent_b != 0) { // if we changed ent_b its off by one for final dbs comparison 
-                ent_b--;
-        }
-        
-        bufdwrite(inode_block, (char *) i_new, sizeof(inode));
+						// error and return
+						printf("Error no directory entry available to create file.\n");
+						return -1;
+				}
+		}
+		if (ent_b != 0) { // if we changed ent_b its off by one for final dbs comparison 
+				ent_b--;
+		}
+		
+		bufdwrite(inode_block, (char *) i_new, sizeof(inode));
 
-        d->size += 1;
-        // WRITE DBS dependent on lvl
-        switch (lvl) {
-                case 0:
-                        d->direct[ent_b] = dbs[ent_b];
-                        bufdwrite(dirBlock.block, (char *) d, sizeof(dnode)); 
-                        break;
-                case 1:
-                        indr->blocks[ent_b] = dbs[ent_b];
-                        bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
-                        bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
-                        break;
+		d->size += 1;
+		// WRITE DBS dependent on lvl
+		switch (lvl) {
+				case 0:
+						d->direct[ent_b] = dbs[ent_b];
+						bufdwrite(dirBlock.block, (char *) d, sizeof(dnode)); 
+						break;
+				case 1:
+						indr->blocks[ent_b] = dbs[ent_b];
+						bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
+						bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
+						break;
 
-                case 2: 
-                        indr->blocks[ent_b] = dbs[ent_b];
-                        bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
-                        bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                        break;
-                // case 3 is not necessary as if lvl = 3
-                // it means there was no space so should have returned with error already
-        }
+				case 2: 
+						indr->blocks[ent_b] = dbs[ent_b];
+						bufdwrite(dirBlock.block, (char *) d, sizeof(dnode));
+						bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+						bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+						break;
+				// case 3 is not necessary as if lvl = 3
+				// it means there was no space so should have returned with error already
+		}
 	// update vcb
 	bufdwrite(0, (char *) v, sizeof(vcb));
 
@@ -1154,9 +1154,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 					struct fuse_file_info *fi)
 {
-    UNUSED(fi);
+	UNUSED(fi);
 	// Move down path
-    // Create modifiable strings
+	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
 	assert(pathcpy != NULL);
 	strcpy(pathcpy, path);
@@ -1213,220 +1213,220 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 		return -1;
 	}
 	
-        unsigned int copied = 0;
+		unsigned int copied = 0;
 	int blocks = ((int)offset)/sizeof(db); // calculate num blocks to look in
 	int block_offset = ((int)offset) % sizeof(db); // calculate offset into 
 	char tmp[sizeof(db)];
-        indirect *indr = indirect_create();
-        indirect *indr2 = indirect_create();
-        int cur_b = 0, blocks_read = 110;
-        int j = 0, lvl = 0;
-        blocknum * dbs;
+		indirect *indr = indirect_create();
+		indirect *indr2 = indirect_create();
+		int cur_b = 0, blocks_read = 110;
+		int j = 0, lvl = 0;
+		blocknum * dbs;
 
-        
-        // calculate the starting block to look in and get dbs, set j, and set lvl accordingly
-        if (blocks < 110) { // in normal direct blocks
-                dbs = i_node->direct; 
-                cur_b = blocks;
-        }
-        else if (blocks >= 110 && blocks < 238) { // need to look in single indirects
-                lvl++;
-                if (i_node->single_indirect.valid) {
-                        bufdread(i_node->single_indirect.block, (char*) indr, sizeof(indirect));
-                        dbs = indr->blocks;
-                        cur_b = blocks - 110;
-                        blocks_read = 128;
-                }
-                else { // free and return
-                        inode_free(i_node);
-                        dnode_free(d);
-                        dnode_free(d_temp);
-                        indirect_free(indr);
-                        indirect_free(indr2);
-                        free(name);
-                        free(pathcpy);
-                        printf("Error: Invalid file offset");
-                        return -1;
-                }
-        }
-        else if (blocks < 16622) { // need to look in double indirects
-                lvl++; // \    / |_| \ /
-                lvl++; //  \/\/  | |  |
-                if (i_node->double_indirect.valid) {
-                        bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        j = (blocks - 238) / 128;
-                        if (indr2->blocks[j].valid) {
-                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                dbs = indr->blocks;
-                                cur_b = blocks - 238 - (j*128);
-                                blocks_read = 128;
-                        }
-                        else { // free and return
-                                inode_free(i_node);
-                                dnode_free(d);
-                                dnode_free(d_temp);
-                                indirect_free(indr);
-                                indirect_free(indr2);
-                                free(name);
-                                free(pathcpy);
-                                printf("Error: Invalid file offset");
-                                return -1;
-                        }
-                }
-                else { // free and return
-                        inode_free(i_node);
-                        dnode_free(d);
-                        dnode_free(d_temp);
-                        indirect_free(indr);
-                        indirect_free(indr2);
-                        free(name);
-                        free(pathcpy);
-                        printf("Error: Invalid file offset");
-                        return -1;
-                }
-        }
-        else { // Error 
-                inode_free(i_node);
-                dnode_free(d);
-                dnode_free(d_temp);
-                indirect_free(indr);
-                indirect_free(indr2);
-                free(name);
-                free(pathcpy);
-                printf("Error: File offset too large\n");
-                return -1; 
-        }
+		
+		// calculate the starting block to look in and get dbs, set j, and set lvl accordingly
+		if (blocks < 110) { // in normal direct blocks
+				dbs = i_node->direct; 
+				cur_b = blocks;
+		}
+		else if (blocks >= 110 && blocks < 238) { // need to look in single indirects
+				lvl++;
+				if (i_node->single_indirect.valid) {
+						bufdread(i_node->single_indirect.block, (char*) indr, sizeof(indirect));
+						dbs = indr->blocks;
+						cur_b = blocks - 110;
+						blocks_read = 128;
+				}
+				else { // free and return
+						inode_free(i_node);
+						dnode_free(d);
+						dnode_free(d_temp);
+						indirect_free(indr);
+						indirect_free(indr2);
+						free(name);
+						free(pathcpy);
+						printf("Error: Invalid file offset");
+						return -1;
+				}
+		}
+		else if (blocks < 16622) { // need to look in double indirects
+				lvl++; // \    / |_| \ /
+				lvl++; //  \/\/  | |  |
+				if (i_node->double_indirect.valid) {
+						bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+						j = (blocks - 238) / 128;
+						if (indr2->blocks[j].valid) {
+								bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+								dbs = indr->blocks;
+								cur_b = blocks - 238 - (j*128);
+								blocks_read = 128;
+						}
+						else { // free and return
+								inode_free(i_node);
+								dnode_free(d);
+								dnode_free(d_temp);
+								indirect_free(indr);
+								indirect_free(indr2);
+								free(name);
+								free(pathcpy);
+								printf("Error: Invalid file offset");
+								return -1;
+						}
+				}
+				else { // free and return
+						inode_free(i_node);
+						dnode_free(d);
+						dnode_free(d_temp);
+						indirect_free(indr);
+						indirect_free(indr2);
+						free(name);
+						free(pathcpy);
+						printf("Error: Invalid file offset");
+						return -1;
+				}
+		}
+		else { // Error 
+				inode_free(i_node);
+				dnode_free(d);
+				dnode_free(d_temp);
+				indirect_free(indr);
+				indirect_free(indr2);
+				free(name);
+				free(pathcpy);
+				printf("Error: File offset too large\n");
+				return -1; 
+		}
 
-        while (copied < size) {
-                // read data from valid blocks in a blocknum[]
-                if (cur_b < blocks_read) { // if we havent read all the blocks needed in the current dbs
-                        if (dbs[cur_b].valid) { // if the block is valid so we can read data from it
-                                bufdread(dbs[cur_b].block, tmp, sizeof(db)); // read in current block
-                                if (size - copied >= sizeof(db)) { // if we need to copy until end of block
-                                        // copy data taking into account potential offsets
-                                        memcpy((char *)buf+copied, tmp+block_offset, sizeof(db)-block_offset);
-                                        copied += sizeof(db)-block_offset; // add to copied
-                                }
-                                else { // otherwise we stop copying before the end of the block
-                                        // take into account how far we actually need to copy
-                                        memcpy((char*)buf+copied, tmp+block_offset, size-copied);
-                                        copied += size-copied; // add to copied
-                                }
-                                block_offset = 0;
-                                cur_b++;
-                        }
-                        else { // free and return
-                                inode_free(i_node);
-                                dnode_free(d);
-                                dnode_free(d_temp);
-                                indirect_free(indr);
-                                indirect_free(indr2);
-                                free(name);
-                                free(pathcpy);
+		while (copied < size) {
+				// read data from valid blocks in a blocknum[]
+				if (cur_b < blocks_read) { // if we havent read all the blocks needed in the current dbs
+						if (dbs[cur_b].valid) { // if the block is valid so we can read data from it
+								bufdread(dbs[cur_b].block, tmp, sizeof(db)); // read in current block
+								if (size - copied >= sizeof(db)) { // if we need to copy until end of block
+										// copy data taking into account potential offsets
+										memcpy((char *)buf+copied, tmp+block_offset, sizeof(db)-block_offset);
+										copied += sizeof(db)-block_offset; // add to copied
+								}
+								else { // otherwise we stop copying before the end of the block
+										// take into account how far we actually need to copy
+										memcpy((char*)buf+copied, tmp+block_offset, size-copied);
+										copied += size-copied; // add to copied
+								}
+								block_offset = 0;
+								cur_b++;
+						}
+						else { // free and return
+								inode_free(i_node);
+								dnode_free(d);
+								dnode_free(d_temp);
+								indirect_free(indr);
+								indirect_free(indr2);
+								free(name);
+								free(pathcpy);
 
-                                return copied;
-                        }
-                }
-                else if (lvl == 0) { // if all of the direct blocks have been read switch to next blocknum
-                        lvl++;
-                        if (i_node->single_indirect.valid) {
-                                bufdread(i_node->single_indirect.block, (char*) indr, sizeof(indirect));
-                                dbs = indr->blocks;
-                                cur_b = 0;
-                                blocks_read = 128;
-                        }
-                        else { // free and return
-                                inode_free(i_node);
-                                dnode_free(d);
-                                dnode_free(d_temp);
-                                indirect_free(indr);
-                                indirect_free(indr2);
-                                free(name);
-                                free(pathcpy);
+								return copied;
+						}
+				}
+				else if (lvl == 0) { // if all of the direct blocks have been read switch to next blocknum
+						lvl++;
+						if (i_node->single_indirect.valid) {
+								bufdread(i_node->single_indirect.block, (char*) indr, sizeof(indirect));
+								dbs = indr->blocks;
+								cur_b = 0;
+								blocks_read = 128;
+						}
+						else { // free and return
+								inode_free(i_node);
+								dnode_free(d);
+								dnode_free(d_temp);
+								indirect_free(indr);
+								indirect_free(indr2);
+								free(name);
+								free(pathcpy);
 
-                                return copied;
-                        }
-                }
-                
-                else if (lvl == 1) { // if next level then move indirection level
-                        lvl++;
-                        if (i_node->double_indirect.valid) {
-                                bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                                if (indr2->blocks[j].valid) {
-                                        bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                        dbs = indr->blocks;
-                                        cur_b = 0;
-                                        blocks_read = 128;
-                                        j++;
-                                }
-                                else { // free and return
-                                        inode_free(i_node);
-                                        dnode_free(d);
-                                        dnode_free(d_temp);
-                                        indirect_free(indr);
-                                        indirect_free(indr2);
-                                        free(name);
-                                        free(pathcpy);
+								return copied;
+						}
+				}
+				
+				else if (lvl == 1) { // if next level then move indirection level
+						lvl++;
+						if (i_node->double_indirect.valid) {
+								bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+								if (indr2->blocks[j].valid) {
+										bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+										dbs = indr->blocks;
+										cur_b = 0;
+										blocks_read = 128;
+										j++;
+								}
+								else { // free and return
+										inode_free(i_node);
+										dnode_free(d);
+										dnode_free(d_temp);
+										indirect_free(indr);
+										indirect_free(indr2);
+										free(name);
+										free(pathcpy);
 
-                                        return copied;
-                                }
-                        }
-                        else { // free and return
-                                inode_free(i_node);
-                                dnode_free(d);
-                                dnode_free(d_temp);
-                                indirect_free(indr);
-                                indirect_free(indr2);
-                                free(name);
-                                free(pathcpy);
-                                return copied;
-                        }   
-                }
-                // if need to move within double indirect
-                else if (lvl == 2) { // if we need to move within indirection levels 
-                        if (j < 128 && indr2->blocks[j].valid) {
-                                if (indr2->blocks[j].valid) {
-                                        bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                        dbs = indr->blocks;
-                                        cur_b = 0;
-                                        blocks_read = 128;
-                                        j++;
-                                }
-                                else { // free and return
-                                        inode_free(i_node);
-                                        dnode_free(d);
-                                        dnode_free(d_temp);
-                                        indirect_free(indr);
-                                        indirect_free(indr2);
-                                        free(name);
-                                        free(pathcpy);
+										return copied;
+								}
+						}
+						else { // free and return
+								inode_free(i_node);
+								dnode_free(d);
+								dnode_free(d_temp);
+								indirect_free(indr);
+								indirect_free(indr2);
+								free(name);
+								free(pathcpy);
+								return copied;
+						}   
+				}
+				// if need to move within double indirect
+				else if (lvl == 2) { // if we need to move within indirection levels 
+						if (j < 128 && indr2->blocks[j].valid) {
+								if (indr2->blocks[j].valid) {
+										bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+										dbs = indr->blocks;
+										cur_b = 0;
+										blocks_read = 128;
+										j++;
+								}
+								else { // free and return
+										inode_free(i_node);
+										dnode_free(d);
+										dnode_free(d_temp);
+										indirect_free(indr);
+										indirect_free(indr2);
+										free(name);
+										free(pathcpy);
 
-                                        return copied;
-                                }
-                        }
-                        else { // free + return
-                                inode_free(i_node);
-                                dnode_free(d);
-                                dnode_free(d_temp);
-                                indirect_free(indr);
-                                indirect_free(indr2);
-                                free(name);
-                                free(pathcpy);
-                                return copied;
-                        }
-                }
-        }
+										return copied;
+								}
+						}
+						else { // free + return
+								inode_free(i_node);
+								dnode_free(d);
+								dnode_free(d_temp);
+								indirect_free(indr);
+								indirect_free(indr2);
+								free(name);
+								free(pathcpy);
+								return copied;
+						}
+				}
+		}
 
-        // free and return
-        inode_free(i_node);
-        dnode_free(d);
-        dnode_free(d_temp);
-        indirect_free(indr);
-        indirect_free(indr2);
+		// free and return
+		inode_free(i_node);
+		dnode_free(d);
+		dnode_free(d_temp);
+		indirect_free(indr);
+		indirect_free(indr2);
 	free(name);
 	free(pathcpy);
 
-        return copied;
+		return copied;
 }
 
 /*
@@ -1443,7 +1443,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 static int vfs_write(const char *path, const char *buf, size_t size,
 					 off_t offset, struct fuse_file_info *fi)
 {
-    UNUSED(fi);
+	UNUSED(fi);
 	// Move down path
 	// Create modifiable strings
 	char *pathcpy = (char *)calloc(strlen(path) + 1, sizeof(char));
@@ -1495,340 +1495,340 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		return -1;
 	}
 	dnode_free(d_temp);
-        // Actual unique write code starts here
+		// Actual unique write code starts here
 
-        unsigned int written = 0;
+		unsigned int written = 0;
 	int blocks = ((int)offset)/sizeof(db); // calculate num blocks to look in
 	int block_offset = ((int)offset) % sizeof(db); // calculate offset into 
 	char tmp[sizeof(db)] = {0};
-        indirect *indr = indirect_create();
-        indirect *indr2 = indirect_create();
-        int cur_b = 0, blocks_write = 110;
-        int j = 0, lvl = 0, i = 0;
-        int fr;
-        blocknum * dbs;
-        unsigned int usable_offset;
+		indirect *indr = indirect_create();
+		indirect *indr2 = indirect_create();
+		int cur_b = 0, blocks_write = 110;
+		int j = 0, lvl = 0, i = 0;
+		int fr;
+		blocknum * dbs;
+		unsigned int usable_offset;
 
-        // calculate real offsets
-        if (offset > i_node->size) { // if our offset is past the end of our file
-                usable_offset = i_node->size; // we need to start from the end of the file instead
-                for (i = 0; i < (int)sizeof(db); i++) { // set tmp to all zeroes
-                        tmp[i] = 0;
-                }
-                blocks = (i_node->size)/sizeof(db);
-                block_offset = (i_node->size)%sizeof(db);
-        }
-        else { // otherwise we just keep the give offset
-                usable_offset = offset;
-        }
+		// calculate real offsets
+		if (offset > i_node->size) { // if our offset is past the end of our file
+				usable_offset = i_node->size; // we need to start from the end of the file instead
+				for (i = 0; i < (int)sizeof(db); i++) { // set tmp to all zeroes
+						tmp[i] = 0;
+				}
+				blocks = (i_node->size)/sizeof(db);
+				block_offset = (i_node->size)%sizeof(db);
+		}
+		else { // otherwise we just keep the give offset
+				usable_offset = offset;
+		}
 
-        // calculate starting blocknum, set cur_b, dbs, lvl, j, etc accordingly
-        if (blocks < 110) { // in normal direct blocks
-                dbs = i_node->direct;
-                cur_b = blocks;
-        }
-        else if (blocks >= 110 && blocks < 238) { // in single indirects
-                lvl++;
-                if (i_node->single_indirect.valid) {
-                        bufdread(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
-                        dbs = indr->blocks;
-                        cur_b = blocks - 110;
-                        blocks_write = 128;
-                }
-                else { // there should never be an else?
-                        // free and return???
-                }
-        }
-        else if (blocks < 16622) { // double indirect magic numbers
-                lvl++; // these two lines are the best in the program
-                lvl++; // lol
-                if (i_node->double_indirect.valid) {
-                        bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        j = (blocks - 238) / 128;
-                        if (indr2->blocks[j].valid) {
-                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                dbs = indr->blocks;
-                                cur_b = blocks - 238 - (j * 128);
-                                blocks_write = 128;
-                        }
-                        else { // once again an else that should never happen
-                        }
-                }
-                else { // should never happen 
-                }
-        }
-        else {
-                printf("Error: File offset too large, file size not supported\n");
-                return -ENOSPC;
-        }
+		// calculate starting blocknum, set cur_b, dbs, lvl, j, etc accordingly
+		if (blocks < 110) { // in normal direct blocks
+				dbs = i_node->direct;
+				cur_b = blocks;
+		}
+		else if (blocks >= 110 && blocks < 238) { // in single indirects
+				lvl++;
+				if (i_node->single_indirect.valid) {
+						bufdread(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
+						dbs = indr->blocks;
+						cur_b = blocks - 110;
+						blocks_write = 128;
+				}
+				else { // there should never be an else?
+						// free and return???
+				}
+		}
+		else if (blocks < 16622) { // double indirect magic numbers
+				lvl++; // these two lines are the best in the program
+				lvl++; // lol
+				if (i_node->double_indirect.valid) {
+						bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+						j = (blocks - 238) / 128;
+						if (indr2->blocks[j].valid) {
+								bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+								dbs = indr->blocks;
+								cur_b = blocks - 238 - (j * 128);
+								blocks_write = 128;
+						}
+						else { // once again an else that should never happen
+						}
+				}
+				else { // should never happen 
+				}
+		}
+		else {
+				printf("Error: File offset too large, file size not supported\n");
+				return -ENOSPC;
+		}
 
-        // write data blocks
-        while (usable_offset + written < offset + size) { // while there are still more blocks to write
-                if (cur_b < blocks_write) { // if there are more blocks to check in dbs
-                        if (dbs[cur_b].valid) { // if the current block is valid we can use it
-                                if (usable_offset < offset) { // only read in part that needs to be nonzero
-                                        bufdread(dbs[cur_b].block, (char *) tmp, block_offset);
-                                }
-                                else {
-                                        bufdread(dbs[cur_b].block, (char *) tmp, sizeof(db)); // read in data block
-                                }
-                        }
-                        else { // otherwise need to get a free block to write to
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        dbs[cur_b] = blocknum_create(getNextFree(v), 1);
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        dnode_free(d);
-                                        inode_free(i_node);
-                                        indirect_free(indr);
-                                        indirect_free(indr2);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
-                        }
+		// write data blocks
+		while (usable_offset + written < offset + size) { // while there are still more blocks to write
+				if (cur_b < blocks_write) { // if there are more blocks to check in dbs
+						if (dbs[cur_b].valid) { // if the current block is valid we can use it
+								if (usable_offset < offset) { // only read in part that needs to be nonzero
+										bufdread(dbs[cur_b].block, (char *) tmp, block_offset);
+								}
+								else {
+										bufdread(dbs[cur_b].block, (char *) tmp, sizeof(db)); // read in data block
+								}
+						}
+						else { // otherwise need to get a free block to write to
+								if ((fr = getNextFree(v)) >= 0) {
+										dbs[cur_b] = blocknum_create(getNextFree(v), 1);
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										dnode_free(d);
+										inode_free(i_node);
+										indirect_free(indr);
+										indirect_free(indr2);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
+						}
 
-                        if (usable_offset + written < offset) { // if we need to write zeroes
-                                if ((offset - (usable_offset + written)) >= (int)sizeof(db)) {
-                                // if we need to copy tmp to end of block
-                                        bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
-                                        written += sizeof(db) - block_offset;
-                                        // reset block_offset and reset tmp to all zeroes
-                                        for (i = 0; i < block_offset+1; i++) {
-                                                tmp[i] = 0;
-                                        }
-                                        block_offset = 0;
-                                }
-                                else { // otherwise just copy partially into block
-                                        bufdwrite (dbs[cur_b].block, (char *) tmp, offset-usable_offset);
-                                        written += offset-usable_offset;
-                                        // and reset our block offset
-                                        block_offset = ((int)offset) % sizeof(db);
-                                }
-                        } 
-                        else { // can copy actual data instead
-                                if (size - written >= sizeof(db)) { // if we have to write until end of block
-                                        memcpy(tmp+block_offset, buf+written, sizeof(db)-block_offset);
-                                        bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
-                                        written += sizeof(db)-block_offset;
-                                }
-                                else { // otherwise we just copy a set number of bytes we need
-                                        memcpy(tmp+block_offset, buf+written, size-written);
-                                        bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
-                                        written += size-written;
-                                }
-                                block_offset = 0;
-                        }
-                        cur_b++;
-                }
-                else if (lvl == 0) {
-                        lvl++;
-                        // write current dbs data to inode block 
-                        for (i = 0; i < 110; i++) {
-                                i_node->direct[i] = dbs[i]; 
-                        }
-                        if (i_node->single_indirect.valid) {
-                        // if the single indirect is valid we can use it and dont have to create one
-                                bufdread(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
-                        }
-                        else { // need to set blocks and write for new indirect
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        i_node->single_indirect = blocknum_create(fr, 1);
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        dnode_free(d);
-                                        inode_free(i_node);
-                                        indirect_free(indr);
-                                        indirect_free(indr2);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
-                                indr->blocks[0] = blocknum_create(0, 0);
-                        }
-                        dbs = indr->blocks;
-                        cur_b = 0; 
-                        blocks_write = 128;
-                }
-                else if (lvl == 1) {
-                        lvl++;
-                        // write current dbs data to indirect block
-                        for (i = 0; i < 128; i++) {
-                                indr->blocks[i] = dbs[i];
-                        }
-                        bufdwrite(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
-                        // setup new level of indirection
-                        if (i_node->double_indirect.valid) {
-                                bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                                if (indr2->blocks[0].valid) {
-                                        bufdread(indr2->blocks[0].block ,(char *) indr, sizeof(indirect));
-                                }
-                                else {
-                                        if ((fr = getNextFree(v)) >= 0) {
-                                                indr2->blocks[0] = blocknum_create(fr, 1);
-                                        }
-                                        else {
-                                                printf("Error: No disk space available.\n");
-                                                dnode_free(d);
-                                                inode_free(i_node);
-                                                indirect_free(indr);
-                                                indirect_free(indr2);
-                                                free(pathcpy);
-                                                free(name);
-                                                return -ENOSPC;
-                                        }
+						if (usable_offset + written < offset) { // if we need to write zeroes
+								if ((offset - (usable_offset + written)) >= (int)sizeof(db)) {
+								// if we need to copy tmp to end of block
+										bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
+										written += sizeof(db) - block_offset;
+										// reset block_offset and reset tmp to all zeroes
+										for (i = 0; i < block_offset+1; i++) {
+												tmp[i] = 0;
+										}
+										block_offset = 0;
+								}
+								else { // otherwise just copy partially into block
+										bufdwrite (dbs[cur_b].block, (char *) tmp, offset-usable_offset);
+										written += offset-usable_offset;
+										// and reset our block offset
+										block_offset = ((int)offset) % sizeof(db);
+								}
+						} 
+						else { // can copy actual data instead
+								if (size - written >= sizeof(db)) { // if we have to write until end of block
+										memcpy(tmp+block_offset, buf+written, sizeof(db)-block_offset);
+										bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
+										written += sizeof(db)-block_offset;
+								}
+								else { // otherwise we just copy a set number of bytes we need
+										memcpy(tmp+block_offset, buf+written, size-written);
+										bufdwrite(dbs[cur_b].block, (char *) tmp, sizeof(db));
+										written += size-written;
+								}
+								block_offset = 0;
+						}
+						cur_b++;
+				}
+				else if (lvl == 0) {
+						lvl++;
+						// write current dbs data to inode block 
+						for (i = 0; i < 110; i++) {
+								i_node->direct[i] = dbs[i]; 
+						}
+						if (i_node->single_indirect.valid) {
+						// if the single indirect is valid we can use it and dont have to create one
+								bufdread(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
+						}
+						else { // need to set blocks and write for new indirect
+								if ((fr = getNextFree(v)) >= 0) {
+										i_node->single_indirect = blocknum_create(fr, 1);
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										dnode_free(d);
+										inode_free(i_node);
+										indirect_free(indr);
+										indirect_free(indr2);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
+								indr->blocks[0] = blocknum_create(0, 0);
+						}
+						dbs = indr->blocks;
+						cur_b = 0; 
+						blocks_write = 128;
+				}
+				else if (lvl == 1) {
+						lvl++;
+						// write current dbs data to indirect block
+						for (i = 0; i < 128; i++) {
+								indr->blocks[i] = dbs[i];
+						}
+						bufdwrite(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
+						// setup new level of indirection
+						if (i_node->double_indirect.valid) {
+								bufdread(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+								if (indr2->blocks[0].valid) {
+										bufdread(indr2->blocks[0].block ,(char *) indr, sizeof(indirect));
+								}
+								else {
+										if ((fr = getNextFree(v)) >= 0) {
+												indr2->blocks[0] = blocknum_create(fr, 1);
+										}
+										else {
+												printf("Error: No disk space available.\n");
+												dnode_free(d);
+												inode_free(i_node);
+												indirect_free(indr);
+												indirect_free(indr2);
+												free(pathcpy);
+												free(name);
+												return -ENOSPC;
+										}
 
-                                        free(indr);
-                                        indr = indirect_create();
-                                        for (i = 0; i < 128; i++) {
-                                                indr->blocks[i] = blocknum_create(0, 0);
-                                        }
-                                        bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
-                                }
-                        }
-                        else {
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        i_node->double_indirect = blocknum_create(fr, 1);
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        dnode_free(d);
-                                        inode_free(i_node);
-                                        indirect_free(indr);
-                                        indirect_free(indr2);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
+										free(indr);
+										indr = indirect_create();
+										for (i = 0; i < 128; i++) {
+												indr->blocks[i] = blocknum_create(0, 0);
+										}
+										bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+								}
+						}
+						else {
+								if ((fr = getNextFree(v)) >= 0) {
+										i_node->double_indirect = blocknum_create(fr, 1);
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										dnode_free(d);
+										inode_free(i_node);
+										indirect_free(indr);
+										indirect_free(indr2);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
 
-                                if ((fr = getNextFree(v)) >= 0) {
-                                        indr2->blocks[0] = blocknum_create(fr, 1);
-                                }
-                                else {
-                                        printf("Error: No disk space available.\n");
-                                        dnode_free(d);
-                                        inode_free(i_node);
-                                        indirect_free(indr);
-                                        indirect_free(indr2);
-                                        free(pathcpy);
-                                        free(name);
-                                        return -ENOSPC;
-                                }
+								if ((fr = getNextFree(v)) >= 0) {
+										indr2->blocks[0] = blocknum_create(fr, 1);
+								}
+								else {
+										printf("Error: No disk space available.\n");
+										dnode_free(d);
+										inode_free(i_node);
+										indirect_free(indr);
+										indirect_free(indr2);
+										free(pathcpy);
+										free(name);
+										return -ENOSPC;
+								}
 
-                                free(indr);
-                                indr = indirect_create();
-                                for (i = 0; i < 128; i++) {
-                                        indr->blocks[i] = blocknum_create(0, 0);
-                                }
-                                bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
-                        }
+								free(indr);
+								indr = indirect_create();
+								for (i = 0; i < 128; i++) {
+										indr->blocks[i] = blocknum_create(0, 0);
+								}
+								bufdwrite(indr2->blocks[0].block, (char *) indr, sizeof(indirect));
+						}
 
-                        dbs = indr->blocks;
-                        cur_b = 0;
-                        blocks_write = 128;
+						dbs = indr->blocks;
+						cur_b = 0;
+						blocks_write = 128;
 
-                }
-                else if (lvl == 2) {
-                        // write current dbs data to finished single indirect
-                        for (i = 0; i < 128; i++) {
-                                indr->blocks[i] = dbs[i];
-                        }
-                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+				}
+				else if (lvl == 2) {
+						// write current dbs data to finished single indirect
+						for (i = 0; i < 128; i++) {
+								indr->blocks[i] = dbs[i];
+						}
+						bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 
-                        j++;
+						j++;
 
-                        if (j < 128) {
-                                if (indr2->blocks[j].valid) { // if we have an existing single indirect to use
-                                        bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                }
-                                else {
-                                        if ((fr = getNextFree(v)) >= 0) {
-                                                indr2->blocks[j] = blocknum_create(fr, 1);
-                                        }
-                                        else {
-                                                printf("Error: No disk space available.\n");
-                                                dnode_free(d);
-                                                inode_free(i_node);
-                                                indirect_free(indr);
-                                                indirect_free(indr2);
-                                                free(pathcpy);
-                                                free(name);
-                                                return -ENOSPC;
-                                        }
-                                        free(indr);
-                                        indr = indirect_create();
-                                        for (i = 0; i < 128; i++) {
-                                                indr->blocks[i] = blocknum_create(0, 0);
-                                        }
-                                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                                }
-                                cur_b = 0;
-                                blocks_write = 128;
-                                dbs = indr->blocks;
-                        }
-                        else { // NO ROOM SO CAN ERROR AND FREE OR WHATEVER
-                                lvl++;
-                        }
-                }
-                else { // no room so need to error and free etc.
-                        // write level 2 indirect block
-                        bufdwrite(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        dnode_free(d);
-                        inode_free(i_node);
-                        indirect_free(indr);
-                        indirect_free(indr2);
-                        free(pathcpy);
-                        free(name);
-                        return -ENOSPC;
-                }
-        }
+						if (j < 128) {
+								if (indr2->blocks[j].valid) { // if we have an existing single indirect to use
+										bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+								}
+								else {
+										if ((fr = getNextFree(v)) >= 0) {
+												indr2->blocks[j] = blocknum_create(fr, 1);
+										}
+										else {
+												printf("Error: No disk space available.\n");
+												dnode_free(d);
+												inode_free(i_node);
+												indirect_free(indr);
+												indirect_free(indr2);
+												free(pathcpy);
+												free(name);
+												return -ENOSPC;
+										}
+										free(indr);
+										indr = indirect_create();
+										for (i = 0; i < 128; i++) {
+												indr->blocks[i] = blocknum_create(0, 0);
+										}
+										bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+								}
+								cur_b = 0;
+								blocks_write = 128;
+								dbs = indr->blocks;
+						}
+						else { // NO ROOM SO CAN ERROR AND FREE OR WHATEVER
+								lvl++;
+						}
+				}
+				else { // no room so need to error and free etc.
+						// write level 2 indirect block
+						bufdwrite(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+						dnode_free(d);
+						inode_free(i_node);
+						indirect_free(indr);
+						indirect_free(indr2);
+						free(pathcpy);
+						free(name);
+						return -ENOSPC;
+				}
+		}
 
-        i_node->size += written;
+		i_node->size += written;
 
-        // handle final writes etc based on level of indirection
+		// handle final writes etc based on level of indirection
 
-        switch (lvl) {
-                case 0:
-                        // probably dont need this for loop...
-                        for (i = 0; i < 110; i++) {
-                                i_node->direct[i] = dbs[i]; 
-                        }
+		switch (lvl) {
+				case 0:
+						// probably dont need this for loop...
+						for (i = 0; i < 110; i++) {
+								i_node->direct[i] = dbs[i]; 
+						}
 
-                        bufdwrite(block.block, (char *) i_node, sizeof(inode));
-                        break;
+						bufdwrite(block.block, (char *) i_node, sizeof(inode));
+						break;
 
-                case 1:
-                        bufdwrite(block.block, (char *) i_node, sizeof(inode));
-                        // write current dbs data to indirect block
-                        for (i = 0; i < 128; i++) {
-                                indr->blocks[i] = dbs[i];
-                        }
-                        bufdwrite(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
+				case 1:
+						bufdwrite(block.block, (char *) i_node, sizeof(inode));
+						// write current dbs data to indirect block
+						for (i = 0; i < 128; i++) {
+								indr->blocks[i] = dbs[i];
+						}
+						bufdwrite(i_node->single_indirect.block, (char *) indr, sizeof(indirect));
 
-                        break;
+						break;
 
-                case 2:
-                        // write current dbs data to finished single indirect
-                        for (i = 0; i < 128; i++) {
-                                indr->blocks[i] = dbs[i];
-                        }
-                        bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
-                        bufdwrite(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        bufdwrite(block.block, (char *) i_node, sizeof(inode));
+				case 2:
+						// write current dbs data to finished single indirect
+						for (i = 0; i < 128; i++) {
+								indr->blocks[i] = dbs[i];
+						}
+						bufdwrite(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+						bufdwrite(i_node->double_indirect.block, (char *) indr2, sizeof(indirect));
+						bufdwrite(block.block, (char *) i_node, sizeof(inode));
 
-                        break;
-        }
+						break;
+		}
 
-        // free and return
-        
-        dnode_free(d);
-        inode_free(i_node);
-        indirect_free(indr);
-        indirect_free(indr2);
-        free(pathcpy);
-        free(name);
+		// free and return
+		
+		dnode_free(d);
+		inode_free(i_node);
+		indirect_free(indr);
+		indirect_free(indr2);
+		free(pathcpy);
+		free(name);
 
 	return written;
 }
@@ -3170,303 +3170,305 @@ int releaseFree(vcb *v, blocknum block) {
 // 2 = used for something
 // int num_blocks;
 int checkIntegrity() {
-        // write the status of all of the frere blocks to disk_status
-        freeblock *f = freeblock_create(blocknum_create(0, 0));
-        bufdread(v->free.block, (char *) f, sizeof(freeblock));
-        disk_status[v->free.block] = 1;
-        int f_previous = -1;
-        while (f->next.valid) {
-                disk_status[f->next.block] = 1;
-                f_previous = f->next.block;
-                bufdread(f->next.block, (char *) f, sizeof(freeblock));
-        }
+		// write the status of all of the frere blocks to disk_status
+		freeblock *f = freeblock_create(blocknum_create(0, 0));
+		bufdread(v->free.block, (char *) f, sizeof(freeblock));
+		disk_status[v->free.block] = 1;
+		int f_previous = -1;
+		while (f->next.valid) {
+				disk_status[f->next.block] = 1;
+				f_previous = f->next.block;
+				bufdread(f->next.block, (char *) f, sizeof(freeblock));
+		}
 
-        // traverse dnodes and inodes checking their status
-        dnode *d = dnode_create(0, 0, 0, 0);
-        bufdread(v->root.block, (char *) d, sizeof(dnode));
-        checkDNODE(d); // recursion!
-        bufdwrite(v->root.block, (char *) d, sizeof(dnode));
+		// traverse dnodes and inodes checking their status
+		dnode *d = dnode_create(0, 0, 0, 0);
+		bufdread(v->root.block, (char *) d, sizeof(dnode));
+		checkDNODE(d); // recursion!
+		bufdwrite(v->root.block, (char *) d, sizeof(dnode));
 
-        // add any orphaned blocks to the free list
-        int i = 0;
-        for (i = 0; i < num_blocks; i++) {
-                if (disk_status[i] == 0) {
-                        f->next = blocknum_create(i, 1);
-                        bufdwrite(f_previous, (char *) f, sizeof(freeblock));
-                        free(f);
-                        f = freeblock_create(blocknum_create(0, 0));
-                        f_previous = i;
-                }
-        }
-        bufdwrite(f_previous, (char *) f, sizeof(freeblock));
-        free(f);
-        return 0;
+		// add any orphaned blocks to the free list
+		int i = 0;
+		for (i = 0; i < num_blocks; i++) {
+				if (disk_status[i] == 0) {
+						f->next = blocknum_create(i, 1);
+						bufdwrite(f_previous, (char *) f, sizeof(freeblock));
+						free(f);
+						f = freeblock_create(blocknum_create(0, 0));
+						f_previous = i;
+				}
+		}
+		bufdwrite(f_previous, (char *) f, sizeof(freeblock));
+		free(f);
+		return 0;
 }
 
 int checkDNODE(dnode *d) {
-        int lvl = 0;
-        int actual_size = 0;
-        int expected_size = d->size;
-        blocknum *dbs = d->direct;
-        int checked = 0, to_check = 110;
+		int lvl = 0;
+		int actual_size = 0;
+		int expected_size = d->size;
+		blocknum *dbs = d->direct;
+		int checked = 0, to_check = 110;
 
-        dirent * de = dirent_create();
-        int i = 0;
+		dirent * de = dirent_create();
+		int i = 0;
 
-        indirect * indr = indirect_create();
-        indirect * indr2 = indirect_create();
-        int j = 0;
-        int k = 0;
-        
-        dnode * d_next = dnode_create(0, 0, 0, 0);
-        inode * i_next = inode_create(0, 0, 0, 0);
+		indirect * indr = indirect_create();
+		indirect * indr2 = indirect_create();
+		int j = 0;
+		int k = 0;
+		
+		dnode * d_next = dnode_create(0, 0, 0, 0);
+		inode * i_next = inode_create(0, 0, 0, 0);
 
-        while (actual_size < expected_size) {
-                if (checked < to_check) {
-                        if (dbs[checked].valid) { // if the entry is a 
-                                if (disk_status[dbs[checked].block] == 1) {
-                                        dbs[checked].valid = 0;
-                                }
-                                else {
-                                        disk_status[dbs[checked].block] = 2;
-                                }
-                                bufdread(dbs[checked].block, (char *) de, sizeof(dirent));
-                                for (i = 0; i < 16; i++) {
-                                        if (de->entries[i].block.valid) {
-                                                if (disk_status[de->entries[i].block.block] == 1) {
-                                                        de->entries[i].block.valid = 0;
+		while (actual_size < expected_size) {
+				if (checked < to_check) {
+						if (dbs[checked].valid) { // if the entry is a 
+								if (disk_status[dbs[checked].block] == 1) {
+										dbs[checked].valid = 0;
+								}
+								else {
+										disk_status[dbs[checked].block] = 2;
+								}
+								bufdread(dbs[checked].block, (char *) de, sizeof(dirent));
+								for (i = 0; i < 16; i++) {
+										if (de->entries[i].block.valid) {
+												if (disk_status[de->entries[i].block.block] == 1) {
+														de->entries[i].block.valid = 0;
 
-                                                }
-                                                else {
-                                                        disk_status[de->entries[i].block.block] = 2;
-                                                }
+												}
+												else {
+														disk_status[de->entries[i].block.block] = 2;
+												}
 
-                                                actual_size++;
+												actual_size++;
 
-                                                if (de->entries[i].type == 0) { // is a dnode
-                                                        bufdread(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
-                                                        checkDNODE(d_next);
-                                                        bufdwrite(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
-                                                }
-                                                else if (de->entries[i].type == 1) { // is an inode
-                                                        bufdread(de->entries[i].block.block, (char *) i_next, sizeof(inode));
-                                                        checkINODE(i_next);
-                                                        bufdwrite(de->entries[i].block.block, (char *) i_next, sizeof(inode));
-                                                }
-                                        }
-                                }
-                                bufdwrite(dbs[checked].block, (char *) de, sizeof(dirent));
-                                
-                                // actual_size++;
-                        }
-                        else {
-                                // do nothing because unused
-                        }
+												if (de->entries[i].type == 0) { // is a dnode
+														bufdread(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
+														checkDNODE(d_next);
+														bufdwrite(de->entries[i].block.block, (char *) d_next, sizeof(dnode));
+												}
+												else if (de->entries[i].type == 1) { // is an inode
+														bufdread(de->entries[i].block.block, (char *) i_next, sizeof(inode));
+														checkINODE(i_next);
+														bufdwrite(de->entries[i].block.block, (char *) i_next, sizeof(inode));
+												}
+										}
+								}
+								bufdwrite(dbs[checked].block, (char *) de, sizeof(dirent));
+								
+								// actual_size++;
+						}
+						else {
+								// do nothing because unused
+						}
 
-                        checked++;
-                }
-                else if (lvl == 0) { // if we need to make the dbs first indirection level
-                        for (k = 0; k < 110; k++) {
-                                d->direct[k] = dbs[k];
-                        }
+						checked++;
+				}
+				else if (lvl == 0) { // if we need to make the dbs first indirection level
+						for (k = 0; k < 110; k++) {
+								d->direct[k] = dbs[k];
+						}
 
-                        if (d->single_indirect.valid) {
-                                if (disk_status[d->single_indirect.block] == 1) {
-                                        d->single_indirect.valid = 0;
-                                }
-                                else {
-                                        disk_status[d->single_indirect.block] = 2;
-                                        bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
-                                        checked = 0;
-                                        to_check = 128;
-                                        dbs = indr->blocks;
-                                }
-                        }
-                        lvl++;
-                }
-                else if (lvl == 1) { // if we need to make the dbs second indirection level
-                        if (j == 0 && d->single_indirect.valid) {
-                                for (k = 0; k < 128; k++) {
-                                        indr->blocks[k] = dbs[k];
-                                }
-                                bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
-                        }
+						if (d->single_indirect.valid) {
+								if (disk_status[d->single_indirect.block] == 1) {
+										d->single_indirect.valid = 0;
+								}
+								else {
+										disk_status[d->single_indirect.block] = 2;
+										bufdread(d->single_indirect.block, (char *) indr, sizeof(indirect));
+										checked = 0;
+										to_check = 128;
+										dbs = indr->blocks;
+								}
+						}
+						lvl++;
+				}
+				else if (lvl == 1) { // if we need to make the dbs second indirection level
+						if (j == 0 && d->single_indirect.valid) {
+								for (k = 0; k < 128; k++) {
+										indr->blocks[k] = dbs[k];
+								}
+								bufdwrite(d->single_indirect.block, (char *) indr, sizeof(indirect));
+						}
 
-                        if (d->double_indirect.valid) {
-                                if (j == 0) {
-                                        if (disk_status[d->double_indirect.block] == 1) {
-                                                d->double_indirect.valid = 0;
-                                                lvl++;
-                                        }
-                                        else {
-                                                disk_status[d->double_indirect.block] = 2;
-                                                bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect));
-                                        }
+						if (d->double_indirect.valid) {
+								if (j == 0) {
+										if (disk_status[d->double_indirect.block] == 1) {
+												d->double_indirect.valid = 0;
+												lvl++;
+										}
+										else {
+												disk_status[d->double_indirect.block] = 2;
+												bufdread(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+										}
 
-                                }
-                                if (j != 0 && indr2->blocks[j-1].valid) {
-                                        for (k = 0; k < 128; k++) {
-                                                indr->blocks[k] = dbs[k];
-                                        }
-                                        bufdwrite(indr2->blocks[j-1].block, (char *) indr, sizeof(indirect));
-                                }
-                                
-                                if (j < 128) {
-                                        if (indr2->blocks[j].valid) {
-                                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+								}
+								if (j != 0 && indr2->blocks[j-1].valid) {
+										for (k = 0; k < 128; k++) {
+												indr->blocks[k] = dbs[k];
+										}
+										bufdwrite(indr2->blocks[j-1].block, (char *) indr, sizeof(indirect));
+								}
+								
+								if (j < 128) {
+										if (indr2->blocks[j].valid) {
+												bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 
-                                                if (disk_status[indr2->blocks[j].block] == 1) {
-                                                        indr2->blocks[j].valid = 0;
-                                                }
-                                                else {
-                                                        disk_status[indr2->blocks[j].block] = 2;
-                                                }
+												if (disk_status[indr2->blocks[j].block] == 1) {
+														indr2->blocks[j].valid = 0;
+												}
+												else {
+														disk_status[indr2->blocks[j].block] = 2;
+												}
 
-                                                checked = 0;
-                                                to_check = 128;
-                                                dbs = indr->blocks;
+												checked = 0;
+												to_check = 128;
+												dbs = indr->blocks;
 
-                                        }
-                                        j++;
-                                }
-                                else {
-                                        lvl++;
-                                }
-                                        /////////
-                        }
-                        else {
-                                if (d->double_indirect.valid) {
-                                        bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
-                                }
-                                lvl++;
-                        }
-                }
-                else { // we should be at the end so make the expected_size = actual_size
-                        if (d->double_indirect.valid) {
-                                bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        }
-                        expected_size = actual_size;
-                        d->size = actual_size;
-                }
-        }
+										}
+										j++;
+								}
+								else {
+										lvl++;
+								}
+										/////////
+						}
+						else {
+								if (d->double_indirect.valid) {
+										bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+								}
+								lvl++;
+						}
+				}
+				else { // we should be at the end so make the expected_size = actual_size
+						if (d->double_indirect.valid) {
+								bufdwrite(d->double_indirect.block, (char *) indr2, sizeof(indirect));
+						}
+						expected_size = actual_size;
+						d->size = actual_size;
+				}
+		}
 
-        return 0;
+		return 0;
 }
 
 
 int checkINODE(inode *i) {
-        int lvl = 0;
-        int actual_size = 0;
-        int expected_size = i->size;
-        blocknum *dbs = i->direct;
-        int checked = 0, to_check = 110;
+		int lvl = 0;
+		int actual_size = 0;
+		int expected_size = i->size;
+		blocknum *dbs = i->direct;
+		int checked = 0, to_check = 110;
 
-        indirect * indr = indirect_create();
-        indirect * indr2 = indirect_create();
-        int j = 0;
-        int k = 0;
+		indirect * indr = indirect_create();
+		indirect * indr2 = indirect_create();
+		int j = 0;
+		int k = 0;
 
-        while (actual_size < expected_size) {
-                if (checked < to_check) {
-                        if (dbs[checked].valid) { // if the entry is a 
-                                if (disk_status[dbs[checked].block] == 1) {
-                                        dbs[checked].valid = 0;
-                                }
-                                else {
-                                        disk_status[dbs[checked].block] = 2;
-                                        actual_size += sizeof(db);
-                                }
-                                
-                                // actual_size++;
-                        }
-                        else {
-                                // do nothing because unused
-                        }
+		while (actual_size < expected_size) {
+				if (checked < to_check) {
+						if (dbs[checked].valid) { // if the entry is a 
+								if (disk_status[dbs[checked].block] == 1) {
+										dbs[checked].valid = 0;
+								}
+								else {
+										disk_status[dbs[checked].block] = 2;
+										actual_size += sizeof(db);
+								}
+								
+								// actual_size++;
+						}
+						else {
+								// do nothing because unused
+						}
 
-                        checked++;
-                }
-                else if (lvl == 0) { // if we need to make the dbs first indirection level
-                        for (k = 0; k < 110; k++) {
-                                i->direct[k] = dbs[k];
-                        }
-                        
-                        if (i->single_indirect.valid) {
-                                if (disk_status[i->single_indirect.block] == 1) {
-                                        i->single_indirect.valid = 0;
-                                }
-                                else {
-                                        disk_status[i->single_indirect.block] = 2;
-                                        bufdread(i->single_indirect.block, (char *) indr, sizeof(indirect));
-                                        checked = 0;
-                                        to_check = 128;
-                                        dbs = indr->blocks;
-                                }
-                        }
-                        lvl++;
-                }
-                else if (lvl == 1) { // if we need to make the dbs second indirection level
-                        if (j == 0 && i->single_indirect.valid) {
-                                for (k = 0; k < 128; k++) {
-                                        indr->blocks[k] = dbs[k];
-                                }
-                                bufdwrite(i->single_indirect.block, (char *) indr, sizeof(indirect));
-                        }
-                        
-                        if (i->double_indirect.valid) {
+						checked++;
+				}
+				else if (lvl == 0) { // if we need to make the dbs first indirection level
+						for (k = 0; k < 110; k++) {
+								i->direct[k] = dbs[k];
+						}
+						
+						if (i->single_indirect.valid) {
+								if (disk_status[i->single_indirect.block] == 1) {
+										i->single_indirect.valid = 0;
+								}
+								else {
+										disk_status[i->single_indirect.block] = 2;
+										bufdread(i->single_indirect.block, (char *) indr, sizeof(indirect));
+										checked = 0;
+										to_check = 128;
+										dbs = indr->blocks;
+								}
+						}
+						lvl++;
+				}
+				else if (lvl == 1) { // if we need to make the dbs second indirection level
+						if (j == 0 && i->single_indirect.valid) {
+								for (k = 0; k < 128; k++) {
+										indr->blocks[k] = dbs[k];
+								}
+								bufdwrite(i->single_indirect.block, (char *) indr, sizeof(indirect));
+						}
+						
+						if (i->double_indirect.valid) {
 
 
-                                if (j == 0) {
-                                        if (disk_status[i->double_indirect.block] == 1) {
-                                                i->double_indirect.valid = 0;
-                                                lvl++;
-                                        }
-                                        else {
-                                                disk_status[i->double_indirect.block] = 2;
-                                                bufdread(i->double_indirect.block, (char *) indr2, sizeof(indirect));
-                                        }
+								if (j == 0) {
+										if (disk_status[i->double_indirect.block] == 1) {
+												i->double_indirect.valid = 0;
+												lvl++;
+										}
+										else {
+												disk_status[i->double_indirect.block] = 2;
+												bufdread(i->double_indirect.block, (char *) indr2, sizeof(indirect));
+										}
 
-                                }
-                                if (j != 0 && indr2->blocks[j-1].valid) {
-                                        for (k = 0; k < 128; k++) {
-                                                indr->blocks[k] = dbs[k];
-                                        }
-                                        bufdwrite(indr2->blocks[j-1].block, (char *) indr, sizeof(indirect));
-                                }
-                                if (j < 128) {
-                                        if (indr2->blocks[j].valid) {
-                                                bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
+								}
+								if (j != 0 && indr2->blocks[j-1].valid) {
+										for (k = 0; k < 128; k++) {
+												indr->blocks[k] = dbs[k];
+										}
+										bufdwrite(indr2->blocks[j-1].block, (char *) indr, sizeof(indirect));
+								}
+								if (j < 128) {
+										if (indr2->blocks[j].valid) {
+												bufdread(indr2->blocks[j].block, (char *) indr, sizeof(indirect));
 
-                                                if (disk_status[indr2->blocks[j].block] == 1) {
-                                                        indr2->blocks[j].valid = 0;
-                                                }
-                                                else {
-                                                        disk_status[indr2->blocks[j].block] = 2;
-                                                }
+												if (disk_status[indr2->blocks[j].block] == 1) {
+														indr2->blocks[j].valid = 0;
+												}
+												else {
+														disk_status[indr2->blocks[j].block] = 2;
+												}
 
-                                                checked = 0;
-                                                to_check = 128;
-                                                dbs = indr->blocks;
+												checked = 0;
+												to_check = 128;
+												dbs = indr->blocks;
 
-                                        }
-                                        j++;
-                                }
-                                else {
-                                        lvl++;
-                                }
-                                        /////////
-                        }
-                        else {
-                                lvl++;
-                        }
-                }
-                else { // we should be at the end so make the expected_size = actual_size
-                        if (i->double_indirect.valid) {
-                                bufdwrite(i->double_indirect.block, (char *) indr2, sizeof(indirect));
-                        }
-                        expected_size = actual_size;
-                        i->size = actual_size;
-                }
-        }
+										}
+										j++;
+								}
+								else {
+										lvl++;
+								}
+										/////////
+						}
+						else {
+								lvl++;
+						}
+				}
+				else { // we should be at the end so make the expected_size = actual_size
+						if (i->double_indirect.valid) {
+								bufdwrite(i->double_indirect.block, (char *) indr2, sizeof(indirect));
+						}
+						if (actual_size < expected_size) {
+							expected_size = actual_size;
+							i->size = actual_size;
+						}
+				}
+		}
 
-        return 0;
+		return 0;
 }
